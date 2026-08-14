@@ -14,9 +14,10 @@
   <data name="ScanSetupTitle.Text" xml:space="preserve"><value>Scan setup</value></data>
   <data name="ScanSetupDescription.Text" xml:space="preserve"><value>Add folders to prepare a scan.</value></data>
   <data name="ScanLocationsTitle.Text" xml:space="preserve"><value>Scan locations</value></data>
-  <data name="ScanLocationsEmpty.Text" xml:space="preserve"><value>No locations selected.</value></data>
+  <data name="ScanLocationsEmpty.Text" xml:space="preserve"><value>No folders added.</value></data>
   <data name="AddFolderButton.Content" xml:space="preserve"><value>Add folder</value></data>
   <data name="StartScanButton.Content" xml:space="preserve"><value>Start scan</value></data>
+  <data name="RemoveFolderButton.Content" xml:space="preserve"><value>Remove</value></data>
   <data name="ReviewTitle.Text" xml:space="preserve"><value>Review before scanning</value></data>
   <data name="ReviewDescription.Text" xml:space="preserve"><value>Add folders to prepare your scan.</value></data>
   <data name="SettingsTitle.Text" xml:space="preserve"><value>Settings</value></data>

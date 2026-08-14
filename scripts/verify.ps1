@@ -18,7 +18,7 @@ Push-Location $repositoryRoot
 try {
     Invoke-DotNet @('restore', 'DuplicateFileCleanerPro.sln', '--runtime', 'win-x64')
     Invoke-DotNet @('build', 'DuplicateFileCleanerPro.sln', '--configuration', 'Release', '-p:Platform=x64', '--no-restore')
-    Invoke-DotNet @('test', 'tests/DuplicateFileCleanerPro.Core.Tests/DuplicateFileCleanerPro.Core.Tests.csproj', '--configuration', 'Release', '--no-build')
+    Invoke-DotNet @('test', 'DuplicateFileCleanerPro.sln', '--configuration', 'Release', '-p:Platform=x64', '--no-build')
 }
 finally {
     Pop-Location

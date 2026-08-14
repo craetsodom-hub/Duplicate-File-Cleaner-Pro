@@ -23,9 +23,20 @@
           <TextBlock x:Uid="ScanLocationsTitle" Style="{StaticResource SectionTitleTextStyle}" Margin="0,0,0,8" />
           <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{StaticResource SurfaceCornerRadius}" Padding="16,14">
             <StackPanel Spacing="14">
-              <TextBlock x:Uid="ScanLocationsEmpty" Opacity="0.7" />
+              <TextBlock x:Name="ScanLocationsEmptyText" x:Uid="ScanLocationsEmpty" Opacity="0.7" />
+              <ListView x:Name="LocationsList" SelectionMode="None" Visibility="Collapsed" IsItemClickEnabled="False">
+                <ListView.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Padding="0,4" ColumnSpacing="12">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                      <StackPanel Spacing="2"><TextBlock Text="{Binding DisplayName}" /><TextBlock Text="{Binding NormalizedPath}" Opacity="0.7" FontSize="12" TextTrimming="CharacterEllipsis" /></StackPanel>
+                      <Button Grid.Column="1" x:Uid="RemoveFolderButton" Tag="{Binding}" Click="OnRemoveFolderClick" />
+                    </Grid>
+                  </DataTemplate>
+                </ListView.ItemTemplate>
+              </ListView>
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button x:Uid="AddFolderButton" />
+                <Button x:Uid="AddFolderButton" Click="OnAddFolderClick" />
                 <Button x:Uid="StartScanButton" IsEnabled="False" />
               </StackPanel>
             </StackPanel>

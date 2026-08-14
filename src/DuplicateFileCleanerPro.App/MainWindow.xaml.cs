@@ -1,7 +1,11 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
+using DuplicateFileCleanerPro.Core.Discovery;
+using DuplicateFileCleanerPro.Infrastructure.Windows.Discovery;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Storage.Pickers;
 using Windows.UI;
 
 namespace DuplicateFileCleanerPro.App;
@@ -14,11 +18,14 @@ public sealed partial class MainWindow : Window
     private const int MinimumWindowHeight = 600;
 
     private readonly NativeWindowProcedure _windowProcedure;
+    private readonly WindowsScanRootNormalizer rootNormalizer = new();
+    private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
     private IntPtr _previousWindowProcedure;
 
     public MainWindow()
     {
         InitializeComponent();
+        LocationsList.ItemsSource = selectedRoots;
         _windowProcedure = WindowProcedure;
         ConfigureMinimumWindowSize();
         ShellNavigation.SelectionChanged += OnNavigationSelectionChanged;
@@ -79,6 +86,40 @@ public sealed partial class MainWindow : Window
         ScanPage.Visibility = settingsSelected ? Visibility.Collapsed : Visibility.Visible;
         SettingsPage.Visibility = settingsSelected ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    private async void OnAddFolderClick(object sender, RoutedEventArgs args)
+    {
+        FolderPicker picker = new();
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        Windows.Storage.StorageFolder? folder = await picker.PickSingleFolderAsync();
+        if (folder is null)
+        {
+            return;
+        }
+
+        RootNormalizationResult normalization = rootNormalizer.Normalize(selectedRoots.Select(root => root.NormalizedPath).Append(folder.Path));
+        selectedRoots.Clear();
+        foreach (ScanRoot root in normalization.Roots)
+        {
+            selectedRoots.Add(new SelectedScanRoot(Path.GetFileName(root.NormalizedPath), root.NormalizedPath));
+        }
+
+        ScanLocationsEmptyText.Visibility = selectedRoots.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        LocationsList.Visibility = selectedRoots.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnRemoveFolderClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is FrameworkElement { Tag: SelectedScanRoot root })
+        {
+            selectedRoots.Remove(root);
+            ScanLocationsEmptyText.Visibility = selectedRoots.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            LocationsList.Visibility = selectedRoots.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+
+    private sealed record SelectedScanRoot(string DisplayName, string NormalizedPath);
 
     private delegate IntPtr NativeWindowProcedure(IntPtr windowHandle, uint message, IntPtr wParam, IntPtr lParam);
 
