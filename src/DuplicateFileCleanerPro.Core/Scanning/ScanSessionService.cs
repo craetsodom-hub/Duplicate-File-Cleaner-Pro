@@ -52,9 +52,9 @@ public sealed class ScanSessionService(IFileDiscoveryService discovery, IContent
 
             var detectionProgress = new RelayProgress<DuplicateDetectionProgress>(update =>
                 progress?.Report(new ScanSessionProgress(ScanSessionState.Analyzing, update.CurrentPath, discoveryResult.Files.Count, update.CandidatesProcessed, update.BytesProcessed, update.TotalCandidateBytes, update.VerifiedGroupCount, discoveryResult.SkippedItems.Count + update.SkippedItemCount)));
-            ExactDuplicateDetectionResult detectionResult = await ExactDuplicateDetector
-                .DetectAsync(discoveryResult.Files, contentAnalysis, detectionProgress, cancellationToken)
-                .ConfigureAwait(false);
+            ExactDuplicateDetectionResult detectionResult = await Task.Run(
+                () => ExactDuplicateDetector.DetectAsync(discoveryResult.Files, contentAnalysis, detectionProgress, cancellationToken),
+                CancellationToken.None).ConfigureAwait(false);
             if (detectionResult.WasCancelled || cancellationToken.IsCancellationRequested)
             {
                 return ScanSessionResult.Cancelled();
