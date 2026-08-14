@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Phase0.Core", "src\DuplicateFileCleanerPro.Phase0.Core\DuplicateFileCleanerPro.Phase0.Core.csproj", "{F6C72C09-0E3C-4CFE-8BC7-B3268654D5B9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Phase0.Harness", "src\DuplicateFileCleanerPro.Phase0.Harness\DuplicateFileCleanerPro.Phase0.Harness.csproj", "{3AF8B908-A793-470E-A57E-AABA9C079AF2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Phase0.PackageProbe", "src\DuplicateFileCleanerPro.Phase0.PackageProbe\DuplicateFileCleanerPro.Phase0.PackageProbe.csproj", "{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F6C72C09-0E3C-4CFE-8BC7-B3268654D5B9}.Debug|x64.ActiveCfg = Debug|x64
+		{F6C72C09-0E3C-4CFE-8BC7-B3268654D5B9}.Debug|x64.Build.0 = Debug|x64
+		{F6C72C09-0E3C-4CFE-8BC7-B3268654D5B9}.Release|x64.ActiveCfg = Release|x64
+		{F6C72C09-0E3C-4CFE-8BC7-B3268654D5B9}.Release|x64.Build.0 = Release|x64
+		{3AF8B908-A793-470E-A57E-AABA9C079AF2}.Debug|x64.ActiveCfg = Debug|x64
+		{3AF8B908-A793-470E-A57E-AABA9C079AF2}.Debug|x64.Build.0 = Debug|x64
+		{3AF8B908-A793-470E-A57E-AABA9C079AF2}.Release|x64.ActiveCfg = Release|x64
+		{3AF8B908-A793-470E-A57E-AABA9C079AF2}.Release|x64.Build.0 = Release|x64
+		{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}.Debug|x64.ActiveCfg = Debug|x64
+		{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}.Debug|x64.Build.0 = Debug|x64
+		{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}.Release|x64.ActiveCfg = Release|x64
+		{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>DuplicateFileCleanerPro.Phase0.Harness</AssemblyName>
+    <RootNamespace>DuplicateFileCleanerPro.Phase0.Harness</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DuplicateFileCleanerPro.Phase0.Core\DuplicateFileCleanerPro.Phase0.Core.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+  </ItemGroup>
+</Project>
