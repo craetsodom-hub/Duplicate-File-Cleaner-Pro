@@ -43,4 +43,40 @@
   <data name="ReviewEmpty" xml:space="preserve"><value>Select one or more local folders. Processing stays on this device.</value></data>
   <data name="CompletionSummary" xml:space="preserve"><value>{0} duplicate groups found</value></data>
   <data name="CompletionDetail" xml:space="preserve"><value>{0} duplicate files · {1:N0} reclaimable bytes · {2} items skipped</value></data>
+  <data name="ResultsNavigationItem.Content" xml:space="preserve"><value>Results</value></data>
+  <data name="ResultsTitle.Text" xml:space="preserve"><value>Verified duplicates</value></data>
+  <data name="ResultsDescription.Text" xml:space="preserve"><value>Review the current completed scan. Selected candidates are not removed.</value></data>
+  <data name="ResultsNewScanButton.Content" xml:space="preserve"><value>New scan</value></data>
+  <data name="ResultsGroupsLabel.Text" xml:space="preserve"><value>Duplicate groups</value></data>
+  <data name="ResultsFilesLabel.Text" xml:space="preserve"><value>Verified files</value></data>
+  <data name="ResultsReclaimableLabel.Text" xml:space="preserve"><value>Reclaimable space</value></data>
+  <data name="ResultsCandidatesLabel.Text" xml:space="preserve"><value>Selected for cleanup</value></data>
+  <data name="ResultsSkippedLabel.Text" xml:space="preserve"><value>Skipped items</value></data>
+  <data name="ResultsSearchBox.PlaceholderText" xml:space="preserve"><value>Search names or paths</value></data>
+  <data name="ResultsSearchBox.AutomationProperties.Name" xml:space="preserve"><value>Search verified duplicate results</value></data>
+  <data name="ResultsSortComboBox.PlaceholderText" xml:space="preserve"><value>Sort</value></data>
+  <data name="ResultsSortReclaimable.Content" xml:space="preserve"><value>Reclaimable space</value></data>
+  <data name="ResultsSortFileSize.Content" xml:space="preserve"><value>File size</value></data>
+  <data name="ResultsSortCopies.Content" xml:space="preserve"><value>Copies</value></data>
+  <data name="ResultsSortName.Content" xml:space="preserve"><value>Name</value></data>
+  <data name="ResultsSortPath.Content" xml:space="preserve"><value>Path</value></data>
+  <data name="ResultsDescendingButton.Content" xml:space="preserve"><value>Descending</value></data>
+  <data name="ResultsFilterComboBox.PlaceholderText" xml:space="preserve"><value>Filter</value></data>
+  <data name="ResultsFilterAll.Content" xml:space="preserve"><value>All groups</value></data>
+  <data name="ResultsFilterSelected.Content" xml:space="preserve"><value>Selected candidates</value></data>
+  <data name="ExpandAllButton.Content" xml:space="preserve"><value>Expand all</value></data>
+  <data name="CollapseAllButton.Content" xml:space="preserve"><value>Collapse all</value></data>
+  <data name="GroupCopiesLabel.Text" xml:space="preserve"><value>Copies</value></data>
+  <data name="GroupSizeLabel.Text" xml:space="preserve"><value>Size</value></data>
+  <data name="GroupReclaimableLabel.Text" xml:space="preserve"><value>Reclaimable</value></data>
+  <data name="ResultsGroupsList.AutomationProperties.Name" xml:space="preserve"><value>Verified duplicate groups</value></data>
+  <data name="ResultsMembersList.AutomationProperties.Name" xml:space="preserve"><value>Verified physical file members</value></data>
+  <data name="ResultsCandidateCheckBox.AutomationProperties.Name" xml:space="preserve"><value>Select candidate for later cleanup</value></data>
+  <data name="ResultsNoDuplicatesTitle" xml:space="preserve"><value>No duplicates found</value></data>
+  <data name="ResultsNoDuplicatesDescription" xml:space="preserve"><value>This completed scan did not find verified exact duplicate groups.</value></data>
+  <data name="ResultsNoMatchesTitle" xml:space="preserve"><value>No matching groups</value></data>
+  <data name="ResultsNoMatchesDescription" xml:space="preserve"><value>Adjust or clear the current search and filter to see verified groups.</value></data>
+  <data name="ResultsAscending" xml:space="preserve"><value>Ascending</value></data>
+  <data name="ResultsDescending" xml:space="preserve"><value>Descending</value></data>
+  <data name="ResultCandidatesFormat" xml:space="preserve"><value>{0} files · {1}</value></data>
 </root>

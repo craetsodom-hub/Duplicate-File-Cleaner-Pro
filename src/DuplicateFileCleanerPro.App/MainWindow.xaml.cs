@@ -12,8 +12,10 @@ using Windows.UI;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.ComponentModel;
 using Microsoft.UI.Dispatching;
 using Windows.ApplicationModel.Resources;
+using DuplicateFileCleanerPro.App.Results;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -26,9 +28,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private readonly NativeWindowProcedure _windowProcedure;
     private static readonly ResourceLoader ResourceLoader = ResourceLoader.GetForViewIndependentUse();
-    private static readonly CompositeFormat CompletionSummaryFormat = CompositeFormat.Parse(ResourceLoader.GetString("CompletionSummary"));
-    private static readonly CompositeFormat CompletionDetailFormat = CompositeFormat.Parse(ResourceLoader.GetString("CompletionDetail"));
     private static readonly CompositeFormat ReviewWithManyRootsFormat = CompositeFormat.Parse(ResourceLoader.GetString("ReviewWithManyRoots"));
+    private static readonly CompositeFormat ResultCandidatesFormat = CompositeFormat.Parse(ResourceLoader.GetString("ResultCandidatesFormat"));
     private readonly WindowsScanRootNormalizer rootNormalizer = new();
     private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
     private readonly ScanWorkflowController scanWorkflow = new(new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService()));
@@ -38,6 +39,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private long activeScanGeneration;
     private bool isDisposed;
     private IntPtr _previousWindowProcedure;
+
+    public ResultsReviewViewModel? ResultsViewModel { get; private set; }
 
     public MainWindow()
     {
@@ -104,9 +107,18 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        bool resultsSelected = ReferenceEquals(args.SelectedItem, ResultsNavigationItem);
         bool settingsSelected = ReferenceEquals(args.SelectedItem, SettingsNavigationItem);
+        ScanScrollViewer.Visibility = resultsSelected ? Visibility.Collapsed : Visibility.Visible;
+        ResultsPage.Visibility = resultsSelected ? Visibility.Visible : Visibility.Collapsed;
         ScanPage.Visibility = settingsSelected ? Visibility.Collapsed : Visibility.Visible;
+        ScanningPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = settingsSelected ? Visibility.Visible : Visibility.Collapsed;
+        if (!resultsSelected && !settingsSelected && scanWorkflow.IsRunning)
+        {
+            ScanPage.Visibility = Visibility.Collapsed;
+            ScanningPage.Visibility = Visibility.Visible;
+        }
     }
 
     private async void OnAddFolderClick(object sender, RoutedEventArgs args)
@@ -149,8 +161,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
         long generation = ++activeScanGeneration;
         setupNotice = null;
+        ClearResultsForNewScan();
+        ResultsPage.Visibility = Visibility.Collapsed;
+        ScanScrollViewer.Visibility = Visibility.Visible;
         ScanPage.Visibility = Visibility.Collapsed;
-        CompletedPage.Visibility = Visibility.Collapsed;
         ScanningPage.Visibility = Visibility.Visible;
         ShellNavigation.IsPaneToggleButtonVisible = false;
         scanStopwatch.Restart();
@@ -173,7 +187,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ShellNavigation.IsPaneToggleButtonVisible = true;
         if (result.State == ScanSessionState.Completed && result.CompletedResult is not null)
         {
-            ShowCompletion(result.CompletedResult);
+            ShowResults(result.CompletedResult);
         }
         else if (result.State == ScanSessionState.Cancelled)
         {
@@ -194,7 +208,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnNewScanClick(object sender, RoutedEventArgs args)
     {
-        CompletedPage.Visibility = Visibility.Collapsed;
+        ShellNavigation.SelectedItem = ScanNavigationItem;
+        ResultsPage.Visibility = Visibility.Collapsed;
+        ScanScrollViewer.Visibility = Visibility.Visible;
         ScanPage.Visibility = Visibility.Visible;
         UpdateSetupState();
     }
@@ -211,13 +227,105 @@ public sealed partial class MainWindow : Window, IDisposable
         GroupsMetricText.Text = progress.VerifiedGroupCount.ToString(CultureInfo.CurrentCulture);
     }
 
-    private void ShowCompletion(CompletedScanResult result)
+    private void ShowResults(CompletedScanResult result)
     {
         ScanningPage.Visibility = Visibility.Collapsed;
-        CompletedPage.Visibility = Visibility.Visible;
-        int duplicateFiles = result.Detection.Groups.Sum(group => group.Files.Count);
-        CompletionSummaryText.Text = string.Format(CultureInfo.CurrentCulture, CompletionSummaryFormat, result.Detection.Groups.Count);
-        CompletionDetailText.Text = string.Format(CultureInfo.CurrentCulture, CompletionDetailFormat, duplicateFiles, result.Detection.TotalReclaimableBytes, result.Discovery.SkippedItems.Count + result.Detection.SkippedItems.Count);
+        if (ResultsViewModel is not null)
+        {
+            ResultsViewModel.PropertyChanged -= OnResultsViewModelPropertyChanged;
+        }
+
+        ResultsViewModel = new ResultsReviewViewModel(result);
+        ResultsViewModel.PropertyChanged += OnResultsViewModelPropertyChanged;
+        ResultsPage.DataContext = ResultsViewModel;
+        ResultsNavigationItem.IsEnabled = true;
+        ResultGroupsText.Text = ResultsViewModel.DuplicateGroupCount.ToString(CultureInfo.CurrentCulture);
+        ResultFilesText.Text = ResultsViewModel.VerifiedMemberCount.ToString(CultureInfo.CurrentCulture);
+        ResultReclaimableText.Text = ResultDisplayFormatter.FormatBytes(ResultsViewModel.ReclaimableBytes);
+        UpdateCandidateSummary();
+        ResultSkippedText.Text = ResultsViewModel.SkippedItemCount.ToString(CultureInfo.CurrentCulture);
+        ResultsEmptyTitle.Text = ResultsViewModel.HasResults ? Text("ResultsNoMatchesTitle") : Text("ResultsNoDuplicatesTitle");
+        ResultsEmptyDescription.Text = ResultsViewModel.HasResults ? Text("ResultsNoMatchesDescription") : Text("ResultsNoDuplicatesDescription");
+        UpdateResultsEmptyState();
+        ScanScrollViewer.Visibility = Visibility.Collapsed;
+        ResultsPage.Visibility = Visibility.Visible;
+        ShellNavigation.SelectedItem = ResultsNavigationItem;
+    }
+
+    private void ClearResultsForNewScan()
+    {
+        if (ResultsViewModel is not null)
+        {
+            ResultsViewModel.PropertyChanged -= OnResultsViewModelPropertyChanged;
+        }
+
+        ResultsViewModel = null;
+        ResultsPage.DataContext = null;
+        ResultsNavigationItem.IsEnabled = false;
+    }
+
+    private void OnResultsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(ResultsReviewViewModel.SelectedCandidateCount) or nameof(ResultsReviewViewModel.SelectedCandidateBytes))
+        {
+            UpdateCandidateSummary();
+        }
+
+        if (args.PropertyName == nameof(ResultsReviewViewModel.HasVisibleGroups))
+        {
+            UpdateResultsEmptyState();
+        }
+    }
+
+    private void UpdateCandidateSummary()
+    {
+        if (ResultsViewModel is null) return;
+        ResultCandidatesText.Text = string.Format(CultureInfo.CurrentCulture, ResultCandidatesFormat,
+            ResultsViewModel.SelectedCandidateCount,
+            ResultDisplayFormatter.FormatBytes(ResultsViewModel.SelectedCandidateBytes));
+    }
+
+    private void OnResultsSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (ResultsViewModel is null) return;
+        ResultsViewModel.SearchText = sender.Text;
+        UpdateResultsEmptyState();
+    }
+
+    private void OnResultsSortChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (ResultsViewModel is null || ResultsSortComboBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
+        ResultsViewModel.SortOption = Enum.Parse<ResultSortOption>(tag, ignoreCase: false);
+    }
+
+    private void OnResultsFilterChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (ResultsViewModel is null || ResultsFilterComboBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
+        ResultsViewModel.FilterOption = Enum.Parse<ResultFilterOption>(tag, ignoreCase: false);
+        UpdateResultsEmptyState();
+    }
+
+    private void OnResultsDirectionClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel is null) return;
+        ResultsViewModel.SortDescending = !ResultsViewModel.SortDescending;
+        ResultsDirectionButton.Content = Text(ResultsViewModel.SortDescending ? "ResultsDescending" : "ResultsAscending");
+    }
+
+    private void OnExpandAllClick(object sender, RoutedEventArgs args) => ResultsViewModel?.ExpandAll();
+
+    private void OnCollapseAllClick(object sender, RoutedEventArgs args) => ResultsViewModel?.CollapseAll();
+
+    private void UpdateResultsEmptyState()
+    {
+        if (ResultsViewModel is null) return;
+        ResultsGroupsList.Visibility = ResultsViewModel.HasVisibleGroups ? Visibility.Visible : Visibility.Collapsed;
+        ResultsEmptyPanel.Visibility = ResultsViewModel.HasVisibleGroups ? Visibility.Collapsed : Visibility.Visible;
+        if (ResultsViewModel.HasResults && !ResultsViewModel.HasVisibleGroups)
+        {
+            ResultsEmptyTitle.Text = Text("ResultsNoMatchesTitle");
+            ResultsEmptyDescription.Text = Text("ResultsNoMatchesDescription");
+        }
     }
 
     private void UpdateSetupState()
