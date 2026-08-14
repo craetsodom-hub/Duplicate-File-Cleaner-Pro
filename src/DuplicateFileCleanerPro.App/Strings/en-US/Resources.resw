@@ -12,14 +12,14 @@
   <data name="ScanNavigationItem.Content" xml:space="preserve"><value>Scan</value></data>
   <data name="SettingsNavigationItem.Content" xml:space="preserve"><value>Settings</value></data>
   <data name="ScanSetupTitle.Text" xml:space="preserve"><value>Scan setup</value></data>
-  <data name="ScanSetupDescription.Text" xml:space="preserve"><value>Choose local folders to review before starting a scan.</value></data>
+  <data name="ScanSetupDescription.Text" xml:space="preserve"><value>Add folders to prepare a scan.</value></data>
   <data name="ScanLocationsTitle.Text" xml:space="preserve"><value>Scan locations</value></data>
   <data name="ScanLocationsEmpty.Text" xml:space="preserve"><value>No locations selected.</value></data>
   <data name="AddFolderButton.Content" xml:space="preserve"><value>Add folder</value></data>
   <data name="StartScanButton.Content" xml:space="preserve"><value>Start scan</value></data>
   <data name="ReviewTitle.Text" xml:space="preserve"><value>Review before scanning</value></data>
-  <data name="ReviewDescription.Text" xml:space="preserve"><value>Selected locations and scan options will appear here in a later phase.</value></data>
+  <data name="ReviewDescription.Text" xml:space="preserve"><value>Add folders to prepare your scan.</value></data>
   <data name="SettingsTitle.Text" xml:space="preserve"><value>Settings</value></data>
   <data name="SettingsSectionTitle.Text" xml:space="preserve"><value>Application preferences</value></data>
-  <data name="SettingsDescription.Text" xml:space="preserve"><value>Settings will be available in a later phase.</value></data>
+  <data name="SettingsDescription.Text" xml:space="preserve"><value>No preferences are available.</value></data>
 </root>

@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.UI;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -21,9 +22,11 @@ public sealed partial class MainWindow : Window
         _windowProcedure = WindowProcedure;
         ConfigureMinimumWindowSize();
         ShellNavigation.SelectionChanged += OnNavigationSelectionChanged;
+        ShellNavigation.ActualThemeChanged += OnActualThemeChanged;
         Title = "Duplicate File Cleaner Pro";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(ShellNavigation);
+        ConfigureCaptionButtons();
     }
 
     private void ConfigureMinimumWindowSize()
@@ -50,6 +53,25 @@ public sealed partial class MainWindow : Window
     }
 
     private static int ScaleForDpi(int pixelsAt96Dpi, uint dpi) => (int)Math.Ceiling(pixelsAt96Dpi * dpi / 96.0);
+
+    private void OnActualThemeChanged(FrameworkElement sender, object args) => ConfigureCaptionButtons();
+
+    private void ConfigureCaptionButtons()
+    {
+        if (!Microsoft.UI.Windowing.AppWindowTitleBar.IsCustomizationSupported())
+        {
+            return;
+        }
+
+        Microsoft.UI.Windowing.AppWindowTitleBar titleBar = AppWindow.TitleBar;
+        bool isDark = ShellNavigation.ActualTheme == ElementTheme.Dark;
+        titleBar.ButtonForegroundColor = isDark ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 0, 0, 0);
+        titleBar.ButtonInactiveForegroundColor = isDark ? Color.FromArgb(255, 150, 150, 150) : Color.FromArgb(255, 96, 96, 96);
+        titleBar.ButtonBackgroundColor = isDark ? Color.FromArgb(255, 32, 32, 32) : Color.FromArgb(255, 243, 243, 243);
+        titleBar.ButtonInactiveBackgroundColor = titleBar.ButtonBackgroundColor;
+        titleBar.ButtonHoverBackgroundColor = isDark ? Color.FromArgb(255, 48, 48, 48) : Color.FromArgb(255, 229, 229, 229);
+        titleBar.ButtonPressedBackgroundColor = isDark ? Color.FromArgb(255, 62, 62, 62) : Color.FromArgb(255, 216, 216, 216);
+    }
 
     private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {

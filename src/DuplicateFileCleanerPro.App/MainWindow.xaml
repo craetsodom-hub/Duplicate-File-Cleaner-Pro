@@ -3,21 +3,50 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls">
-  <controls:NavigationView x:Name="ShellNavigation" PaneDisplayMode="Left" IsBackButtonVisible="Collapsed" IsSettingsVisible="False">
+  <controls:NavigationView
+      x:Name="ShellNavigation"
+      PaneDisplayMode="Left"
+      OpenPaneLength="224"
+      CompactPaneLength="48"
+      IsBackButtonVisible="Collapsed"
+      IsSettingsVisible="False"
+      Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
     <controls:NavigationView.MenuItems>
-      <controls:NavigationViewItem x:Name="ScanNavigationItem" x:Uid="ScanNavigationItem" Icon="Find" IsSelected="True" />
-      <controls:NavigationViewItem x:Name="SettingsNavigationItem" x:Uid="SettingsNavigationItem" Icon="Setting" />
+      <controls:NavigationViewItem x:Name="ScanNavigationItem" x:Uid="ScanNavigationItem" Icon="Find" IsSelected="True" MinHeight="40" Padding="12,0" />
+      <controls:NavigationViewItem x:Name="SettingsNavigationItem" x:Uid="SettingsNavigationItem" Icon="Setting" MinHeight="40" Padding="12,0" />
     </controls:NavigationView.MenuItems>
-    <Grid Padding="{StaticResource PagePadding}">
-      <StackPanel x:Name="ScanPage" Spacing="20">
-        <TextBlock x:Uid="ScanSetupTitle" Style="{StaticResource PageTitleTextStyle}" />
-        <TextBlock x:Uid="ScanSetupDescription" Opacity="0.7" />
-        <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{StaticResource SurfaceCornerRadius}" Padding="20">
-          <StackPanel Spacing="16"><TextBlock x:Uid="ScanLocationsTitle" Style="{StaticResource SectionTitleTextStyle}" /><TextBlock x:Uid="ScanLocationsEmpty" Opacity="0.7" /><StackPanel Orientation="Horizontal" Spacing="12"><Button x:Uid="AddFolderButton" /><Button x:Uid="StartScanButton" IsEnabled="False" /></StackPanel></StackPanel>
-        </Border>
-        <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{StaticResource SurfaceCornerRadius}" Padding="20"><StackPanel Spacing="8"><TextBlock x:Uid="ReviewTitle" Style="{StaticResource SectionTitleTextStyle}" /><TextBlock x:Uid="ReviewDescription" Opacity="0.7" /></StackPanel></Border>
-      </StackPanel>
-      <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="20"><TextBlock x:Uid="SettingsTitle" Style="{StaticResource PageTitleTextStyle}" /><Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{StaticResource SurfaceCornerRadius}" Padding="20"><StackPanel Spacing="8"><TextBlock x:Uid="SettingsSectionTitle" Style="{StaticResource SectionTitleTextStyle}" /><TextBlock x:Uid="SettingsDescription" Opacity="0.7" /></StackPanel></Border></StackPanel>
-    </Grid>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <Grid Padding="{StaticResource PagePadding}">
+        <StackPanel x:Name="ScanPage" MaxWidth="880" Spacing="0">
+          <TextBlock x:Uid="ScanSetupTitle" Style="{StaticResource PageTitleTextStyle}" />
+          <TextBlock x:Uid="ScanSetupDescription" Opacity="0.7" Margin="0,6,0,20" />
+          <TextBlock x:Uid="ScanLocationsTitle" Style="{StaticResource SectionTitleTextStyle}" Margin="0,0,0,8" />
+          <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{StaticResource SurfaceCornerRadius}" Padding="16,14">
+            <StackPanel Spacing="14">
+              <TextBlock x:Uid="ScanLocationsEmpty" Opacity="0.7" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Uid="AddFolderButton" />
+                <Button x:Uid="StartScanButton" IsEnabled="False" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+          <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="0,16,0,0" Margin="0,20,0,0">
+            <StackPanel Spacing="4">
+              <TextBlock x:Uid="ReviewTitle" Style="{StaticResource SectionTitleTextStyle}" />
+              <TextBlock x:Uid="ReviewDescription" Opacity="0.7" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <StackPanel x:Name="SettingsPage" Visibility="Collapsed" MaxWidth="880" Spacing="0">
+          <TextBlock x:Uid="SettingsTitle" Style="{StaticResource PageTitleTextStyle}" />
+          <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="0,16,0,0" Margin="0,16,0,0">
+            <StackPanel Spacing="4">
+              <TextBlock x:Uid="SettingsSectionTitle" Style="{StaticResource SectionTitleTextStyle}" />
+              <TextBlock x:Uid="SettingsDescription" Opacity="0.7" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Grid>
+    </ScrollViewer>
   </controls:NavigationView>
 </Window>
