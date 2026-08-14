@@ -23,4 +23,24 @@
   <data name="SettingsTitle.Text" xml:space="preserve"><value>Settings</value></data>
   <data name="SettingsSectionTitle.Text" xml:space="preserve"><value>Application preferences</value></data>
   <data name="SettingsDescription.Text" xml:space="preserve"><value>No preferences are available.</value></data>
+  <data name="ScanningTitle.Text" xml:space="preserve"><value>Scanning</value></data>
+  <data name="ScanningDescription.Text" xml:space="preserve"><value>Processing selected local locations.</value></data>
+  <data name="ScanningWaiting.Text" xml:space="preserve"><value>Preparing scan session</value></data>
+  <data name="CancelScanButton.Content" xml:space="preserve"><value>Cancel scan</value></data>
+  <data name="MetricFiles.Text" xml:space="preserve"><value>Files discovered</value></data>
+  <data name="MetricAnalyzed.Text" xml:space="preserve"><value>Files analyzed</value></data>
+  <data name="MetricGroups.Text" xml:space="preserve"><value>Verified groups</value></data>
+  <data name="MetricElapsed.Text" xml:space="preserve"><value>Elapsed</value></data>
+  <data name="CompletedTitle.Text" xml:space="preserve"><value>Scan complete</value></data>
+  <data name="CompletedDescription.Text" xml:space="preserve"><value>Your verified scan result is retained for this application session.</value></data>
+  <data name="NewScanButton.Content" xml:space="preserve"><value>New scan</value></data>
+  <data name="ScanDiscovering" xml:space="preserve"><value>Discovering files</value></data>
+  <data name="ScanAnalyzing" xml:space="preserve"><value>Analyzing exact duplicates</value></data>
+  <data name="ScanActivityFallback" xml:space="preserve"><value>Processing selected local folders</value></data>
+  <data name="ScanFailed" xml:space="preserve"><value>The scan could not be completed. Your selected locations are unchanged.</value></data>
+  <data name="ReviewWithOneRoot" xml:space="preserve"><value>1 selected local location. Exact duplicate mode with safety exclusions is ready.</value></data>
+  <data name="ReviewWithManyRoots" xml:space="preserve"><value>{0} selected local locations. Exact duplicate mode with safety exclusions is ready.</value></data>
+  <data name="ReviewEmpty" xml:space="preserve"><value>Select one or more local folders. Processing stays on this device.</value></data>
+  <data name="CompletionSummary" xml:space="preserve"><value>{0} duplicate groups found</value></data>
+  <data name="CompletionDetail" xml:space="preserve"><value>{0} duplicate files · {1:N0} reclaimable bytes · {2} items skipped</value></data>
 </root>

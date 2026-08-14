@@ -8,6 +8,7 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
     public async Task<DiscoveryResult> DiscoverAsync(
         IEnumerable<ScanRoot> roots,
         DiscoveryPolicy policy,
+        IProgress<DiscoveryProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(roots);
@@ -38,6 +39,7 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
             }
 
             string directory = directories.Pop();
+            progress?.Report(new DiscoveryProgress(directory, files.Count, skipped.Count));
             IEnumerable<string> entries;
             try
             {
@@ -71,6 +73,7 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
 
                     if (++inspectedEntries % 32 == 0)
                     {
+                        progress?.Report(new DiscoveryProgress(entry, files.Count, skipped.Count));
                         await Task.Yield();
                     }
 
@@ -87,6 +90,7 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
             }
         }
 
+        progress?.Report(new DiscoveryProgress(string.Empty, files.Count, skipped.Count));
         return new DiscoveryResult(files, skipped, false);
     }
 

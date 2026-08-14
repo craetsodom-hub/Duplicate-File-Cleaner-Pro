@@ -102,7 +102,7 @@ public sealed class ExactDuplicateDetectorTests
 
         using CancellationTokenSource cancellation = new();
         cancellation.Cancel();
-        ExactDuplicateDetectionResult cancelled = await ExactDuplicateDetector.DetectAsync([first, unavailable], analysis, cancellation.Token);
+        ExactDuplicateDetectionResult cancelled = await ExactDuplicateDetector.DetectAsync([first, unavailable], analysis, cancellationToken: cancellation.Token);
         Assert.IsTrue(cancelled.WasCancelled);
         Assert.IsEmpty(cancelled.Groups);
     }

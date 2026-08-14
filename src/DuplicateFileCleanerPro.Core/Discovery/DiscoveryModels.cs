@@ -46,6 +46,11 @@ public sealed record DiscoveryResult(
     IReadOnlyList<SkippedDiscoveryItem> SkippedItems,
     bool WasCancelled);
 
+public sealed record DiscoveryProgress(
+    string CurrentPath,
+    int FilesDiscovered,
+    int SkippedItemCount);
+
 public interface IScanRootNormalizer
 {
     RootNormalizationResult Normalize(IEnumerable<string> selectedPaths);
@@ -56,5 +61,6 @@ public interface IFileDiscoveryService
     Task<DiscoveryResult> DiscoverAsync(
         IEnumerable<ScanRoot> roots,
         DiscoveryPolicy policy,
+        IProgress<DiscoveryProgress>? progress = null,
         CancellationToken cancellationToken = default);
 }

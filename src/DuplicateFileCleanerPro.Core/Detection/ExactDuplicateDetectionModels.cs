@@ -65,6 +65,15 @@ public sealed record DuplicateDetectionSkippedItem(
     DiscoveredFile File,
     ContentAnalysisFailureReason Reason);
 
+public sealed record DuplicateDetectionProgress(
+    string CurrentPath,
+    int CandidatesProcessed,
+    long BytesProcessed,
+    long TotalCandidateBytes,
+    int VerifiedGroupCount,
+    int SkippedItemCount,
+    bool IsVerifying);
+
 public sealed record ExactDuplicateDetectionResult(
     IReadOnlyList<DuplicateFileGroup> Groups,
     IReadOnlyList<DuplicateDetectionSkippedItem> SkippedItems,

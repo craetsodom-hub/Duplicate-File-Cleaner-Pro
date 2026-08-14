@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using DuplicateFileCleanerPro.Core.Detection;
 using DuplicateFileCleanerPro.Core.Discovery;
+using DuplicateFileCleanerPro.Core.Scanning;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Detection;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Discovery;
 
@@ -109,7 +110,7 @@ public sealed class FilesystemDiscoveryIntegrationTests
 
         using CancellationTokenSource cancellation = new();
         cancellation.Cancel();
-        DiscoveryResult result = await new WindowsFileDiscoveryService().DiscoverAsync([new ScanRoot(corpus.Root)], new DiscoveryPolicy(), cancellation.Token);
+        DiscoveryResult result = await new WindowsFileDiscoveryService().DiscoverAsync([new ScanRoot(corpus.Root)], new DiscoveryPolicy(), cancellationToken: cancellation.Token);
         Assert.IsTrue(result.WasCancelled);
         Assert.IsEmpty(result.Files);
     }
@@ -173,6 +174,27 @@ public sealed class FilesystemDiscoveryIntegrationTests
 
         Assert.IsEmpty(result.Groups);
         Assert.HasCount(1, result.SkippedItems);
+    }
+
+    [TestMethod]
+    public async Task ScanSessionRunsMultipleRootsThroughDiscoveryAndExactDetection()
+    {
+        using TemporaryCorpus corpus = new();
+        string firstRoot = Path.Combine(corpus.Root, "first root");
+        string secondRoot = Path.Combine(corpus.Root, "second root");
+        Directory.CreateDirectory(firstRoot);
+        Directory.CreateDirectory(secondRoot);
+        File.WriteAllText(Path.Combine(firstRoot, "résumé.txt"), "same content");
+        File.WriteAllText(Path.Combine(secondRoot, "copy.bin"), "same content");
+        File.WriteAllText(Path.Combine(secondRoot, "different.dat"), "not the same");
+
+        using var session = new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService());
+        ScanSessionResult result = await session.RunAsync([new ScanRoot(firstRoot), new ScanRoot(secondRoot)], new DiscoveryPolicy());
+
+        Assert.AreEqual(ScanSessionState.Completed, result.State);
+        Assert.IsNotNull(result.CompletedResult);
+        Assert.HasCount(1, result.CompletedResult.Detection.Groups);
+        Assert.AreEqual("same content".Length, result.CompletedResult.Detection.TotalReclaimableBytes);
     }
 
     private static async Task<DiscoveryResult> DiscoverAsync(string root)

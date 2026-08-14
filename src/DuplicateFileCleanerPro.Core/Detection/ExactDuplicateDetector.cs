@@ -9,6 +9,7 @@ public static class ExactDuplicateDetector
     public static async Task<ExactDuplicateDetectionResult> DetectAsync(
         IEnumerable<DiscoveredFile> discoveredFiles,
         IContentAnalysisService contentAnalysis,
+        IProgress<DuplicateDetectionProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(discoveredFiles);
@@ -26,6 +27,14 @@ public static class ExactDuplicateDetector
                 .ToList();
 
             var verifiedGroups = new List<List<DiscoveredFile>>();
+            List<DiscoveredFile> candidates = physicalFiles
+                .GroupBy(file => file.Length)
+                .Where(bucket => bucket.Count() > 1)
+                .SelectMany(bucket => bucket)
+                .ToList();
+            long totalCandidateBytes = candidates.Aggregate(0L, (total, file) => checked(total + file.Length));
+            int processedCandidates = 0;
+            long processedBytes = 0;
             foreach (IGrouping<long, DiscoveredFile> sizeBucket in physicalFiles
                          .GroupBy(file => file.Length)
                          .OrderBy(bucket => bucket.Key))
@@ -40,9 +49,12 @@ public static class ExactDuplicateDetector
                 foreach (DiscoveredFile file in sizeBucket.OrderBy(file => file.NormalizedPath, PathComparer))
                 {
                     ContentHashOutcome hash = await contentAnalysis.HashAsync(file, cancellationToken).ConfigureAwait(false);
+                    processedCandidates++;
+                    processedBytes = checked(processedBytes + file.Length);
                     if (!hash.Succeeded)
                     {
                         skipped.Add(new DuplicateDetectionSkippedItem(file, hash.FailureReason!.Value));
+                        progress?.Report(new DuplicateDetectionProgress(file.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, false));
                         continue;
                     }
 
@@ -54,6 +66,7 @@ public static class ExactDuplicateDetector
                     }
 
                     bucket.Add(file);
+                    progress?.Report(new DuplicateDetectionProgress(file.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, false));
                 }
 
                 foreach (List<DiscoveredFile> hashBucket in digestBuckets.Values
@@ -69,6 +82,7 @@ public static class ExactDuplicateDetector
                             ContentComparisonOutcome comparison = await contentAnalysis
                                 .CompareAsync(equalSet[0], candidate, cancellationToken)
                                 .ConfigureAwait(false);
+                            progress?.Report(new DuplicateDetectionProgress(candidate.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, true));
                             if (!comparison.Succeeded)
                             {
                                 skipped.Add(new DuplicateDetectionSkippedItem(candidate, comparison.FailureReason!.Value));
@@ -99,6 +113,8 @@ public static class ExactDuplicateDetector
                 .OrderBy(group => group[0].NormalizedPath, PathComparer)
                 .Select(group => new DuplicateFileGroup(group, checked((group.Count - 1) * group[0].Length)))
                 .ToList();
+
+            progress?.Report(new DuplicateDetectionProgress(string.Empty, processedCandidates, processedBytes, totalCandidateBytes, groups.Count, skipped.Count, true));
 
             long totalReclaimableBytes = groups.Aggregate(0L, (total, group) => checked(total + group.ReclaimableBytes));
             return new ExactDuplicateDetectionResult(groups, skipped, totalReclaimableBytes, false);

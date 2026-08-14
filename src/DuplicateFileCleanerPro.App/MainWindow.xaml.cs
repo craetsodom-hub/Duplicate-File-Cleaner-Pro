@@ -2,15 +2,22 @@ using System;
 using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using DuplicateFileCleanerPro.Core.Discovery;
+using DuplicateFileCleanerPro.Core.Scanning;
+using DuplicateFileCleanerPro.Infrastructure.Windows.Detection;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Discovery;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
 using Windows.UI;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
+using Microsoft.UI.Dispatching;
+using Windows.ApplicationModel.Resources;
 
 namespace DuplicateFileCleanerPro.App;
 
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IDisposable
 {
     private const int GwlWndProc = -4;
     private const uint WmGetMinMaxInfo = 0x0024;
@@ -18,8 +25,17 @@ public sealed partial class MainWindow : Window
     private const int MinimumWindowHeight = 600;
 
     private readonly NativeWindowProcedure _windowProcedure;
+    private static readonly ResourceLoader ResourceLoader = ResourceLoader.GetForViewIndependentUse();
+    private static readonly CompositeFormat CompletionSummaryFormat = CompositeFormat.Parse(ResourceLoader.GetString("CompletionSummary"));
+    private static readonly CompositeFormat CompletionDetailFormat = CompositeFormat.Parse(ResourceLoader.GetString("CompletionDetail"));
+    private static readonly CompositeFormat ReviewWithManyRootsFormat = CompositeFormat.Parse(ResourceLoader.GetString("ReviewWithManyRoots"));
     private readonly WindowsScanRootNormalizer rootNormalizer = new();
     private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
+    private readonly ScanSessionService scanSession = new(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService());
+    private readonly Stopwatch scanStopwatch = new();
+    private readonly DispatcherQueueTimer elapsedTimer;
+    private CancellationTokenSource? scanCancellation;
+    private string? setupNotice;
     private IntPtr _previousWindowProcedure;
 
     public MainWindow()
@@ -34,6 +50,10 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(ShellNavigation);
         ConfigureCaptionButtons();
+        elapsedTimer = DispatcherQueue.CreateTimer();
+        elapsedTimer.Interval = TimeSpan.FromSeconds(1);
+        elapsedTimer.Tick += (_, _) => ElapsedMetricText.Text = scanStopwatch.Elapsed.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
+        UpdateSetupState();
     }
 
     private void ConfigureMinimumWindowSize()
@@ -102,11 +122,11 @@ public sealed partial class MainWindow : Window
         selectedRoots.Clear();
         foreach (ScanRoot root in normalization.Roots)
         {
-            selectedRoots.Add(new SelectedScanRoot(Path.GetFileName(root.NormalizedPath), root.NormalizedPath));
+            string name = Path.GetFileName(root.NormalizedPath.TrimEnd(Path.DirectorySeparatorChar));
+            selectedRoots.Add(new SelectedScanRoot(string.IsNullOrEmpty(name) ? root.NormalizedPath : name, root.NormalizedPath));
         }
 
-        ScanLocationsEmptyText.Visibility = selectedRoots.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        LocationsList.Visibility = selectedRoots.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        UpdateSetupState();
     }
 
     private void OnRemoveFolderClick(object sender, RoutedEventArgs args)
@@ -114,9 +134,100 @@ public sealed partial class MainWindow : Window
         if (sender is FrameworkElement { Tag: SelectedScanRoot root })
         {
             selectedRoots.Remove(root);
-            ScanLocationsEmptyText.Visibility = selectedRoots.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            LocationsList.Visibility = selectedRoots.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            UpdateSetupState();
         }
+    }
+
+    private async void OnStartScanClick(object sender, RoutedEventArgs args)
+    {
+        if (selectedRoots.Count == 0 || scanCancellation is not null)
+        {
+            return;
+        }
+
+        scanCancellation = new CancellationTokenSource();
+        setupNotice = null;
+        ScanPage.Visibility = Visibility.Collapsed;
+        CompletedPage.Visibility = Visibility.Collapsed;
+        ScanningPage.Visibility = Visibility.Visible;
+        ShellNavigation.IsPaneToggleButtonVisible = false;
+        scanStopwatch.Restart();
+        elapsedTimer.Start();
+        var progress = new Progress<ScanSessionProgress>(UpdateScanProgress);
+        ScanSessionResult result = await scanSession.RunAsync(selectedRoots.Select(root => new ScanRoot(root.NormalizedPath)), new DiscoveryPolicy(), progress, scanCancellation.Token);
+        elapsedTimer.Stop();
+        scanCancellation.Dispose();
+        scanCancellation = null;
+        ShellNavigation.IsPaneToggleButtonVisible = true;
+        if (result.State == ScanSessionState.Completed && result.CompletedResult is not null)
+        {
+            ShowCompletion(result.CompletedResult);
+        }
+        else if (result.State == ScanSessionState.Cancelled)
+        {
+            ScanningPage.Visibility = Visibility.Collapsed;
+            ScanPage.Visibility = Visibility.Visible;
+            UpdateSetupState();
+        }
+        else
+        {
+            ScanningPage.Visibility = Visibility.Collapsed;
+            ScanPage.Visibility = Visibility.Visible;
+            setupNotice = Text("ScanFailed");
+            UpdateSetupState();
+        }
+    }
+
+    private void OnCancelScanClick(object sender, RoutedEventArgs args) => scanCancellation?.Cancel();
+
+    private void OnNewScanClick(object sender, RoutedEventArgs args)
+    {
+        CompletedPage.Visibility = Visibility.Collapsed;
+        ScanPage.Visibility = Visibility.Visible;
+        UpdateSetupState();
+    }
+
+    private void UpdateScanProgress(ScanSessionProgress progress)
+    {
+        bool analyzing = progress.State is ScanSessionState.Analyzing or ScanSessionState.Completed;
+        ScanProgressBar.IsIndeterminate = !analyzing;
+        ScanProgressBar.Value = progress.TotalCandidateBytes == 0 ? 0 : 100d * progress.BytesProcessed / progress.TotalCandidateBytes;
+        ScanStageTitle.Text = progress.State == ScanSessionState.Discovering ? Text("ScanDiscovering") : Text("ScanAnalyzing");
+        CurrentActivityText.Text = string.IsNullOrWhiteSpace(progress.CurrentPath) ? Text("ScanActivityFallback") : progress.CurrentPath;
+        FilesMetricText.Text = progress.FilesDiscovered.ToString(CultureInfo.CurrentCulture);
+        AnalyzedMetricText.Text = progress.FilesAnalyzed.ToString(CultureInfo.CurrentCulture);
+        GroupsMetricText.Text = progress.VerifiedGroupCount.ToString(CultureInfo.CurrentCulture);
+    }
+
+    private void ShowCompletion(CompletedScanResult result)
+    {
+        ScanningPage.Visibility = Visibility.Collapsed;
+        CompletedPage.Visibility = Visibility.Visible;
+        int duplicateFiles = result.Detection.Groups.Sum(group => group.Files.Count);
+        CompletionSummaryText.Text = string.Format(CultureInfo.CurrentCulture, CompletionSummaryFormat, result.Detection.Groups.Count);
+        CompletionDetailText.Text = string.Format(CultureInfo.CurrentCulture, CompletionDetailFormat, duplicateFiles, result.Detection.TotalReclaimableBytes, result.Discovery.SkippedItems.Count + result.Detection.SkippedItems.Count);
+    }
+
+    private void UpdateSetupState()
+    {
+        bool hasRoots = selectedRoots.Count > 0;
+        ScanLocationsEmptyText.Visibility = hasRoots ? Visibility.Collapsed : Visibility.Visible;
+        LocationsList.Visibility = hasRoots ? Visibility.Visible : Visibility.Collapsed;
+        StartScanButton.IsEnabled = hasRoots && scanCancellation is null;
+        ReviewSummaryText.Text = setupNotice ?? (selectedRoots.Count switch
+        {
+            0 => Text("ReviewEmpty"),
+            1 => Text("ReviewWithOneRoot"),
+            _ => string.Format(CultureInfo.CurrentCulture, ReviewWithManyRootsFormat, selectedRoots.Count),
+        });
+    }
+
+    private static string Text(string key) => ResourceLoader.GetString(key);
+
+    public void Dispose()
+    {
+        scanCancellation?.Dispose();
+        scanSession.Dispose();
     }
 
     private sealed record SelectedScanRoot(string DisplayName, string NormalizedPath);
