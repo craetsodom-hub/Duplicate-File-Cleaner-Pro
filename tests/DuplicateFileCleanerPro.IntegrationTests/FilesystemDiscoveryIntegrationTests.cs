@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+using DuplicateFileCleanerPro.Core.Detection;
 using DuplicateFileCleanerPro.Core.Discovery;
+using DuplicateFileCleanerPro.Infrastructure.Windows.Detection;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Discovery;
 
 namespace DuplicateFileCleanerPro.IntegrationTests;
@@ -112,6 +114,67 @@ public sealed class FilesystemDiscoveryIntegrationTests
         Assert.IsEmpty(result.Files);
     }
 
+    [TestMethod]
+    public async Task ExactDetectionRejectsNearMissesAndCollapsesHardLinkAliases()
+    {
+        using TemporaryCorpus corpus = new();
+        string exactOne = corpus.Write("exact-one.dat", "matching content");
+        string exactTwo = corpus.Write("exact-two.txt", "matching content");
+        corpus.Write("same-length-middle.dat", "matching Xontent");
+        corpus.Write("prefix-suffix.dat", "matching contenX");
+        corpus.Write("empty-one.bin", string.Empty);
+        corpus.Write("empty-two.bin", string.Empty);
+        corpus.WriteBytes("large-one.bin", Enumerable.Repeat((byte)0x5A, 512 * 1024).ToArray());
+        corpus.WriteBytes("large-two.bin", Enumerable.Repeat((byte)0x5A, 512 * 1024).ToArray());
+        string alias = Path.Combine(corpus.Root, "exact-hard-link.dat");
+        if (!CreateHardLink(alias, exactOne, IntPtr.Zero))
+        {
+            Assert.Inconclusive($"Hard-link creation is unavailable: {Marshal.GetLastWin32Error()}.");
+        }
+
+        DiscoveryResult discovery = await DiscoverAsync(corpus.Root);
+        ExactDuplicateDetectionResult result = await ExactDuplicateDetector.DetectAsync(discovery.Files, new WindowsContentAnalysisService());
+
+        Assert.IsFalse(result.WasCancelled);
+        Assert.HasCount(3, result.Groups);
+        Assert.IsTrue(result.Groups.Any(group => group.Files.All(file => file.Length == 0) && group.Files.Count == 2));
+        Assert.IsTrue(result.Groups.Any(group => group.Files.All(file => file.Length == 512 * 1024) && group.Files.Count == 2));
+        DuplicateFileGroup exactGroup = result.Groups.Single(group => group.Files.Any(file => file.FileName == "exact-two.txt"));
+        Assert.HasCount(2, exactGroup.Files);
+        Assert.IsTrue(exactGroup.Files.Any(file => file.FileName is "exact-one.dat" or "exact-hard-link.dat"));
+        Assert.AreEqual("matching content".Length, exactGroup.ReclaimableBytes);
+    }
+
+    [TestMethod]
+    public async Task ChangedOrRemovedFileIsSkippedWithoutReportingADuplicate()
+    {
+        using TemporaryCorpus corpus = new();
+        string first = corpus.Write("first.dat", "stable");
+        corpus.Write("second.dat", "stable");
+        DiscoveryResult discovery = await DiscoverAsync(corpus.Root);
+        File.WriteAllText(first, "changed after discovery");
+
+        ExactDuplicateDetectionResult result = await ExactDuplicateDetector.DetectAsync(discovery.Files, new WindowsContentAnalysisService());
+
+        Assert.IsEmpty(result.Groups);
+        Assert.IsTrue(result.SkippedItems.Any(item => item.Reason == ContentAnalysisFailureReason.ChangedDuringAnalysis));
+    }
+
+    [TestMethod]
+    public async Task RemovedFileIsIsolatedWithoutReportingADuplicate()
+    {
+        using TemporaryCorpus corpus = new();
+        string removed = corpus.Write("removed.dat", "stable");
+        corpus.Write("remaining.dat", "stable");
+        DiscoveryResult discovery = await DiscoverAsync(corpus.Root);
+        File.Delete(removed);
+
+        ExactDuplicateDetectionResult result = await ExactDuplicateDetector.DetectAsync(discovery.Files, new WindowsContentAnalysisService());
+
+        Assert.IsEmpty(result.Groups);
+        Assert.HasCount(1, result.SkippedItems);
+    }
+
     private static async Task<DiscoveryResult> DiscoverAsync(string root)
     {
         RootNormalizationResult normalized = new WindowsScanRootNormalizer().Normalize([root]);
@@ -137,6 +200,14 @@ public sealed class FilesystemDiscoveryIntegrationTests
             string path = Path.Combine(Root, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, content);
+            return path;
+        }
+
+        public string WriteBytes(string relativePath, byte[] content)
+        {
+            string path = Path.Combine(Root, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, content);
             return path;
         }
 

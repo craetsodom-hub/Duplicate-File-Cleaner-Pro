@@ -27,12 +27,13 @@ internal sealed class WindowsFileInspector
             0,
             IntPtr.Zero);
 
-        if (handle.IsInvalid)
-        {
-            return false;
-        }
+        return TryInspect(handle, out snapshot);
+    }
 
-        if (!GetFileInformationByHandle(handle, out ByHandleFileInformation information))
+    public static bool TryInspect(SafeFileHandle handle, out FileSnapshot? snapshot)
+    {
+        snapshot = null;
+        if (handle.IsInvalid || !GetFileInformationByHandle(handle, out ByHandleFileInformation information))
         {
             return false;
         }
