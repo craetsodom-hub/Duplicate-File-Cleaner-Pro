@@ -13,12 +13,61 @@ function Invoke-DotNet {
     }
 }
 
+function Assert-NoRipgrepMatch {
+    param(
+        [Parameter(Mandatory = $true)][string]$Description,
+        [Parameter(Mandatory = $true)][string]$Pattern,
+        [Parameter(Mandatory = $true)][string[]]$Paths
+    )
+
+    $matches = & rg --line-number --glob '*.cs' --glob '*.xaml' --glob '*.csproj' $Pattern @Paths
+    $result = $LASTEXITCODE
+    if ($result -eq 0) {
+        throw "$Description check failed:`n$($matches -join [Environment]::NewLine)"
+    }
+
+    if ($result -ne 1) {
+        throw "$Description check could not run (rg exit code $result)."
+    }
+
+    Write-Host "> ${Description}: clean"
+}
+
+function Assert-ReferenceHashes {
+    $expected = [ordered]@{
+        '01-home-scan-setup.png' = 'EF15BA237C48EC941DA9533DA0E60B3239FB0AA0FB68BD4040A77C93E8AF247E'
+        '02-scanning.png' = 'DA21C628C0304ACDECBCC5B0108B29C0A72728B792031243CC5C5405BC2119EB'
+        '03-results.png' = '934B1A869F01CF6D6280CA209D03074CB62E46AFE4DFA799D6565429B213D95F'
+        '04-cleanup.png' = 'A42D38A709D9A7E531BE224067FFE9B535C7038035B3FDF09D8D1A6F297FF367'
+        '05-settings.png' = 'E521BD36B43F596459677FFED5DA5C518A0927B4A1624CFF44E3358D4535B79D'
+    }
+
+    foreach ($entry in $expected.GetEnumerator()) {
+        $path = Join-Path 'docs\design-references' $entry.Key
+        $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        if ($actual -ne $entry.Value) {
+            throw "Reference hash mismatch for $path. Expected $($entry.Value), found $actual."
+        }
+    }
+
+    Write-Host '> visual reference SHA-256 integrity: verified'
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repositoryRoot
 try {
     Invoke-DotNet @('restore', 'DuplicateFileCleanerPro.sln', '--runtime', 'win-x64')
     Invoke-DotNet @('build', 'DuplicateFileCleanerPro.sln', '--configuration', 'Release', '-p:Platform=x64', '--no-restore')
     Invoke-DotNet @('test', 'DuplicateFileCleanerPro.sln', '--configuration', 'Release', '-p:Platform=x64', '--no-build')
+    Assert-NoRipgrepMatch -Description 'production destructive API' -Pattern '\b(File|Directory)\.(Delete|Move|Replace|Write(AllBytes|AllText)?|Append(AllText)?|Create(SymbolicLink|HardLink)?)\b|FileMode\.(Create|CreateNew|Append|Truncate)|SetAccessControl|SetOwner|SHFileOperation|Recycle' -Paths @('src')
+    Assert-NoRipgrepMatch -Description 'synchronous async blocking' -Pattern '\.Result\b|\.Wait\s*\(|GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(' -Paths @('src')
+    Assert-NoRipgrepMatch -Description 'QA hook leakage' -Pattern 'TemporaryQa|Phase4\.QA|QA-root|automatic root selection' -Paths @('src')
+    Assert-NoRipgrepMatch -Description 'network, telemetry, and upload API' -Pattern 'HttpClient|WebRequest|Socket|Telemetry|Analytics|Upload|ApplicationInsights|Sentry' -Paths @('src')
+    Assert-ReferenceHashes
+    & git diff --check
+    if ($LASTEXITCODE -ne 0) {
+        throw 'git diff --check failed.'
+    }
 }
 finally {
     Pop-Location

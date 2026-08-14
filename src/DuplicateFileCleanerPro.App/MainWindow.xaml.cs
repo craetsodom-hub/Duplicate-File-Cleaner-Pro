@@ -31,11 +31,12 @@ public sealed partial class MainWindow : Window, IDisposable
     private static readonly CompositeFormat ReviewWithManyRootsFormat = CompositeFormat.Parse(ResourceLoader.GetString("ReviewWithManyRoots"));
     private readonly WindowsScanRootNormalizer rootNormalizer = new();
     private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
-    private readonly ScanSessionService scanSession = new(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService());
+    private readonly ScanWorkflowController scanWorkflow = new(new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService()));
     private readonly Stopwatch scanStopwatch = new();
     private readonly DispatcherQueueTimer elapsedTimer;
-    private CancellationTokenSource? scanCancellation;
     private string? setupNotice;
+    private long activeScanGeneration;
+    private bool isDisposed;
     private IntPtr _previousWindowProcedure;
 
     public MainWindow()
@@ -53,6 +54,7 @@ public sealed partial class MainWindow : Window, IDisposable
         elapsedTimer = DispatcherQueue.CreateTimer();
         elapsedTimer.Interval = TimeSpan.FromSeconds(1);
         elapsedTimer.Tick += (_, _) => ElapsedMetricText.Text = scanStopwatch.Elapsed.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
+        Closed += OnClosed;
         UpdateSetupState();
     }
 
@@ -140,12 +142,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async void OnStartScanClick(object sender, RoutedEventArgs args)
     {
-        if (selectedRoots.Count == 0 || scanCancellation is not null)
+        if (selectedRoots.Count == 0 || scanWorkflow.IsRunning)
         {
             return;
         }
 
-        scanCancellation = new CancellationTokenSource();
+        long generation = ++activeScanGeneration;
         setupNotice = null;
         ScanPage.Visibility = Visibility.Collapsed;
         CompletedPage.Visibility = Visibility.Collapsed;
@@ -153,11 +155,21 @@ public sealed partial class MainWindow : Window, IDisposable
         ShellNavigation.IsPaneToggleButtonVisible = false;
         scanStopwatch.Restart();
         elapsedTimer.Start();
-        var progress = new Progress<ScanSessionProgress>(UpdateScanProgress);
-        ScanSessionResult result = await scanSession.RunAsync(selectedRoots.Select(root => new ScanRoot(root.NormalizedPath)), new DiscoveryPolicy(), progress, scanCancellation.Token);
+        var progress = new CoalescingUiProgress<ScanSessionProgress>(DispatcherQueue, update =>
+        {
+            if (!isDisposed && generation == activeScanGeneration)
+            {
+                UpdateScanProgress(update);
+            }
+        });
+        ScanSessionResult result = await scanWorkflow.StartAsync(selectedRoots.Select(root => new ScanRoot(root.NormalizedPath)), new DiscoveryPolicy(), progress);
+        if (isDisposed || generation != activeScanGeneration)
+        {
+            return;
+        }
+
+        activeScanGeneration++;
         elapsedTimer.Stop();
-        scanCancellation.Dispose();
-        scanCancellation = null;
         ShellNavigation.IsPaneToggleButtonVisible = true;
         if (result.State == ScanSessionState.Completed && result.CompletedResult is not null)
         {
@@ -178,7 +190,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void OnCancelScanClick(object sender, RoutedEventArgs args) => scanCancellation?.Cancel();
+    private void OnCancelScanClick(object sender, RoutedEventArgs args) => scanWorkflow.Cancel();
 
     private void OnNewScanClick(object sender, RoutedEventArgs args)
     {
@@ -189,8 +201,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void UpdateScanProgress(ScanSessionProgress progress)
     {
-        bool analyzing = progress.State is ScanSessionState.Analyzing or ScanSessionState.Completed;
-        ScanProgressBar.IsIndeterminate = !analyzing;
+        bool determinateAnalysis = progress.State == ScanSessionState.Analyzing && !progress.IsVerifying;
+        ScanProgressBar.IsIndeterminate = !determinateAnalysis;
         ScanProgressBar.Value = progress.TotalCandidateBytes == 0 ? 0 : 100d * progress.BytesProcessed / progress.TotalCandidateBytes;
         ScanStageTitle.Text = progress.State == ScanSessionState.Discovering ? Text("ScanDiscovering") : Text("ScanAnalyzing");
         CurrentActivityText.Text = string.IsNullOrWhiteSpace(progress.CurrentPath) ? Text("ScanActivityFallback") : progress.CurrentPath;
@@ -213,7 +225,7 @@ public sealed partial class MainWindow : Window, IDisposable
         bool hasRoots = selectedRoots.Count > 0;
         ScanLocationsEmptyText.Visibility = hasRoots ? Visibility.Collapsed : Visibility.Visible;
         LocationsList.Visibility = hasRoots ? Visibility.Visible : Visibility.Collapsed;
-        StartScanButton.IsEnabled = hasRoots && scanCancellation is null;
+        StartScanButton.IsEnabled = hasRoots && !scanWorkflow.IsRunning;
         ReviewSummaryText.Text = setupNotice ?? (selectedRoots.Count switch
         {
             0 => Text("ReviewEmpty"),
@@ -226,8 +238,68 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public void Dispose()
     {
-        scanCancellation?.Dispose();
-        scanSession.Dispose();
+        if (isDisposed)
+        {
+            return;
+        }
+
+        isDisposed = true;
+        activeScanGeneration++;
+        elapsedTimer.Stop();
+        scanWorkflow.Dispose();
+    }
+
+    private void OnClosed(object sender, WindowEventArgs args)
+    {
+        Closed -= OnClosed;
+        Dispose();
+    }
+
+    private sealed class CoalescingUiProgress<T>(DispatcherQueue dispatcher, Action<T> callback) : IProgress<T>
+        where T : class
+    {
+        private readonly object gate = new();
+        private T? latest;
+        private bool scheduled;
+
+        public void Report(T value)
+        {
+            lock (gate)
+            {
+                latest = value;
+                if (scheduled)
+                {
+                    return;
+                }
+
+                scheduled = true;
+            }
+
+            if (!dispatcher.TryEnqueue(Drain))
+            {
+                lock (gate)
+                {
+                    scheduled = false;
+                    latest = null;
+                }
+            }
+        }
+
+        private void Drain()
+        {
+            T? value;
+            lock (gate)
+            {
+                value = latest;
+                latest = null;
+                scheduled = false;
+            }
+
+            if (value is not null)
+            {
+                callback(value);
+            }
+        }
     }
 
     private sealed record SelectedScanRoot(string DisplayName, string NormalizedPath);

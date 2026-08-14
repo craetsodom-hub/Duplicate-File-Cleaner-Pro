@@ -54,7 +54,7 @@ public static class ExactDuplicateDetector
                     if (!hash.Succeeded)
                     {
                         skipped.Add(new DuplicateDetectionSkippedItem(file, hash.FailureReason!.Value));
-                        progress?.Report(new DuplicateDetectionProgress(file.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, false));
+                        ReportProgress(progress, new DuplicateDetectionProgress(file.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, false));
                         continue;
                     }
 
@@ -66,7 +66,7 @@ public static class ExactDuplicateDetector
                     }
 
                     bucket.Add(file);
-                    progress?.Report(new DuplicateDetectionProgress(file.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, false));
+                    ReportProgress(progress, new DuplicateDetectionProgress(file.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, false));
                 }
 
                 foreach (List<DiscoveredFile> hashBucket in digestBuckets.Values
@@ -77,15 +77,27 @@ public static class ExactDuplicateDetector
                     foreach (DiscoveredFile candidate in hashBucket)
                     {
                         bool placed = false;
-                        foreach (List<DiscoveredFile> equalSet in equalSets)
+                        for (int setIndex = 0; setIndex < equalSets.Count; setIndex++)
                         {
+                            List<DiscoveredFile> equalSet = equalSets[setIndex];
                             ContentComparisonOutcome comparison = await contentAnalysis
                                 .CompareAsync(equalSet[0], candidate, cancellationToken)
                                 .ConfigureAwait(false);
-                            progress?.Report(new DuplicateDetectionProgress(candidate.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, true));
+                            ReportProgress(progress, new DuplicateDetectionProgress(candidate.NormalizedPath, processedCandidates, processedBytes, totalCandidateBytes, verifiedGroups.Count, skipped.Count, true));
                             if (!comparison.Succeeded)
                             {
-                                skipped.Add(new DuplicateDetectionSkippedItem(candidate, comparison.FailureReason!.Value));
+                                ContentAnalysisFailureReason reason = comparison.FailureReason!.Value;
+                                foreach (DiscoveredFile uncertainMember in equalSet.Append(candidate))
+                                {
+                                    if (!skipped.Any(item => item.File.PhysicalIdentity == uncertainMember.PhysicalIdentity))
+                                    {
+                                        skipped.Add(new DuplicateDetectionSkippedItem(uncertainMember, reason));
+                                    }
+                                }
+
+                                // A failure involving the representative invalidates every earlier
+                                // comparison in this set. Uncertainty must never survive as a group.
+                                equalSets.RemoveAt(setIndex);
                                 placed = true;
                                 break;
                             }
@@ -104,24 +116,63 @@ public static class ExactDuplicateDetector
                         }
                     }
 
-                    verifiedGroups.AddRange(equalSets.Where(group => group.Count > 1));
+                    foreach (List<DiscoveredFile> equalSet in equalSets.Where(group => group.Count > 1))
+                    {
+                        bool remainsValid = true;
+                        foreach (DiscoveredFile member in equalSet)
+                        {
+                            ContentValidationOutcome validation = await contentAnalysis.ValidateAsync(member, cancellationToken).ConfigureAwait(false);
+                            if (validation.Succeeded)
+                            {
+                                continue;
+                            }
+
+                            remainsValid = false;
+                            foreach (DiscoveredFile uncertainMember in equalSet)
+                            {
+                                if (!skipped.Any(item => item.File.PhysicalIdentity == uncertainMember.PhysicalIdentity))
+                                {
+                                    skipped.Add(new DuplicateDetectionSkippedItem(uncertainMember, validation.FailureReason!.Value));
+                                }
+                            }
+
+                            break;
+                        }
+
+                        if (remainsValid)
+                        {
+                            verifiedGroups.Add(equalSet);
+                        }
+                    }
                 }
             }
 
             List<DuplicateFileGroup> groups = verifiedGroups
                 .Select(group => group.OrderBy(file => file.NormalizedPath, PathComparer).ToList())
                 .OrderBy(group => group[0].NormalizedPath, PathComparer)
-                .Select(group => new DuplicateFileGroup(group, checked((group.Count - 1) * group[0].Length)))
+                .Select(group => new DuplicateFileGroup(Array.AsReadOnly(group.ToArray()), checked((group.Count - 1) * group[0].Length)))
                 .ToList();
 
-            progress?.Report(new DuplicateDetectionProgress(string.Empty, processedCandidates, processedBytes, totalCandidateBytes, groups.Count, skipped.Count, true));
+            ReportProgress(progress, new DuplicateDetectionProgress(string.Empty, processedCandidates, processedBytes, totalCandidateBytes, groups.Count, skipped.Count, true));
 
             long totalReclaimableBytes = groups.Aggregate(0L, (total, group) => checked(total + group.ReclaimableBytes));
-            return new ExactDuplicateDetectionResult(groups, skipped, totalReclaimableBytes, false);
+            return new ExactDuplicateDetectionResult(Array.AsReadOnly(groups.ToArray()), Array.AsReadOnly(skipped.ToArray()), totalReclaimableBytes, false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return new ExactDuplicateDetectionResult([], skipped, 0, true);
+            return new ExactDuplicateDetectionResult([], Array.AsReadOnly(skipped.ToArray()), 0, true);
+        }
+    }
+
+    private static void ReportProgress(IProgress<DuplicateDetectionProgress>? progress, DuplicateDetectionProgress value)
+    {
+        try
+        {
+            progress?.Report(value);
+        }
+        catch (Exception)
+        {
+            // Progress is observational and must not affect duplicate proof.
         }
     }
 }

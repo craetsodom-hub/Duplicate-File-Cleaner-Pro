@@ -41,7 +41,9 @@ public sealed class WindowsScanRootNormalizer : IScanRootNormalizer
         }
 
         roots.Sort(PathComparer);
-        return new RootNormalizationResult(roots.Select(path => new ScanRoot(path)).ToArray(), rejected);
+        return new RootNormalizationResult(
+            Array.AsReadOnly(roots.Select(path => new ScanRoot(path)).ToArray()),
+            Array.AsReadOnly(rejected.ToArray()));
     }
 
     private static bool TryNormalize(string selectedPath, out string? normalizedPath, out DiscoverySkipReason reason)
@@ -52,6 +54,18 @@ public sealed class WindowsScanRootNormalizer : IScanRootNormalizer
         try
         {
             string fullPath = Path.GetFullPath(selectedPath);
+            if (fullPath.StartsWith("\\\\?\\UNC\\", StringComparison.OrdinalIgnoreCase)
+                || fullPath.StartsWith("\\\\.\\", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = DiscoverySkipReason.NetworkLocation;
+                return false;
+            }
+
+            if (fullPath.StartsWith("\\\\?\\", StringComparison.OrdinalIgnoreCase))
+            {
+                fullPath = fullPath[4..];
+            }
+
             if (fullPath.StartsWith("\\\\", StringComparison.Ordinal))
             {
                 reason = DiscoverySkipReason.NetworkLocation;

@@ -10,6 +10,16 @@ namespace DuplicateFileCleanerPro.Infrastructure.Windows.Detection;
 public sealed class WindowsContentAnalysisService : IContentAnalysisService
 {
     private const int BufferSize = 64 * 1024;
+    private readonly IContentAnalysisObserver? observer;
+
+    public WindowsContentAnalysisService()
+    {
+    }
+
+    internal WindowsContentAnalysisService(IContentAnalysisObserver observer)
+    {
+        this.observer = observer;
+    }
 
     public async Task<ContentHashOutcome> HashAsync(DiscoveredFile file, CancellationToken cancellationToken = default)
     {
@@ -29,6 +39,7 @@ public sealed class WindowsContentAnalysisService : IContentAnalysisService
                 while ((bytesRead = await stream.ReadAsync(buffer.AsMemory(0, BufferSize), cancellationToken).ConfigureAwait(false)) > 0)
                 {
                     hash.AppendData(buffer, 0, bytesRead);
+                    observer?.OnChunkRead(ContentAnalysisOperation.Hashing, file.NormalizedPath, bytesRead);
                 }
 
                 if (!MatchesDiscoverySnapshot(stream, file))
@@ -84,6 +95,7 @@ public sealed class WindowsContentAnalysisService : IContentAnalysisService
                 {
                     int leftRead = await leftStream.ReadAsync(leftBuffer.AsMemory(0, BufferSize), cancellationToken).ConfigureAwait(false);
                     int rightRead = await rightStream.ReadAsync(rightBuffer.AsMemory(0, BufferSize), cancellationToken).ConfigureAwait(false);
+                    observer?.OnChunkRead(ContentAnalysisOperation.Comparing, left.NormalizedPath, leftRead);
                     if (leftRead != rightRead || !leftBuffer.AsSpan(0, leftRead).SequenceEqual(rightBuffer.AsSpan(0, rightRead)))
                     {
                         return ContentComparisonOutcome.Different();
@@ -126,6 +138,30 @@ public sealed class WindowsContentAnalysisService : IContentAnalysisService
         }
     }
 
+    public Task<ContentValidationOutcome> ValidateAsync(DiscoveredFile file, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            using FileStream stream = OpenReadOnly(file.NormalizedPath);
+            return Task.FromResult(MatchesDiscoverySnapshot(stream, file)
+                ? ContentValidationOutcome.Valid()
+                : ContentValidationOutcome.Failure(ContentAnalysisFailureReason.ChangedDuringAnalysis));
+        }
+        catch (IOException)
+        {
+            return Task.FromResult(ContentValidationOutcome.Failure(ContentAnalysisFailureReason.Unavailable));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Task.FromResult(ContentValidationOutcome.Failure(ContentAnalysisFailureReason.Unavailable));
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            return Task.FromResult(ContentValidationOutcome.Failure(ContentAnalysisFailureReason.Unavailable));
+        }
+    }
+
     private static FileStream OpenReadOnly(string path) => new(
         path,
         FileMode.Open,
@@ -142,7 +178,8 @@ public sealed class WindowsContentAnalysisService : IContentAnalysisService
                 && snapshot is { HasAdditionalNamedStream: false }
                 && snapshot.Identity == file.PhysicalIdentity
                 && snapshot.Length == file.Length
-                && snapshot.LastWriteTimeUtc == file.LastWriteTimeUtc;
+                && snapshot.LastWriteTimeUtc == file.LastWriteTimeUtc
+                && snapshot.ChangeTimeUtc == file.ChangeTimeUtc;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
         {

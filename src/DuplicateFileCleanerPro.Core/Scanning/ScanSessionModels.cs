@@ -22,7 +22,8 @@ public sealed record ScanSessionProgress(
     long BytesProcessed,
     long TotalCandidateBytes,
     int VerifiedGroupCount,
-    int SkippedItemCount);
+    int SkippedItemCount,
+    bool IsVerifying);
 
 public sealed record CompletedScanResult(
     DiscoveryResult Discovery,

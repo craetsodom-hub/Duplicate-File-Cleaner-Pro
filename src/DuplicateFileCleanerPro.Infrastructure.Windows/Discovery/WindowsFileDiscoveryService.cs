@@ -35,11 +35,40 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                return new DiscoveryResult(files, skipped, true);
+                return Snapshot(files, skipped, wasCancelled: true);
             }
 
             string directory = directories.Pop();
-            progress?.Report(new DiscoveryProgress(directory, files.Count, skipped.Count));
+            if (!WindowsFileInspector.TryInspectDirectory(directory, out WindowsFileInspector.FileSnapshot? directoryBefore)
+                || directoryBefore is null)
+            {
+                skipped.Add(new SkippedDiscoveryItem(directory, DiscoverySkipReason.IdentityUnavailable));
+                continue;
+            }
+
+            if ((directoryBefore.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                skipped.Add(new SkippedDiscoveryItem(directory, DiscoverySkipReason.ReparsePoint));
+                continue;
+            }
+
+            if ((directoryBefore.Attributes & FileAttributes.Directory) == 0)
+            {
+                skipped.Add(new SkippedDiscoveryItem(directory, DiscoverySkipReason.UnstableOrDisappeared));
+                continue;
+            }
+
+            DiscoverySkipReason? directoryPolicyReason = GetPolicySkipReason(directoryBefore.Attributes, policy);
+            if (directoryPolicyReason is not null)
+            {
+                skipped.Add(new SkippedDiscoveryItem(directory, directoryPolicyReason.Value));
+                continue;
+            }
+
+            ReportProgress(progress, new DiscoveryProgress(directory, files.Count, skipped.Count));
+            int fileCountBefore = files.Count;
+            int skipCountBefore = skipped.Count;
+            int pendingDirectoryCountBefore = directories.Count;
             IEnumerable<string> entries;
             try
             {
@@ -68,12 +97,12 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
                 {
                     if (cancellationToken.IsCancellationRequested)
                     {
-                        return new DiscoveryResult(files, skipped, true);
+                        return Snapshot(files, skipped, wasCancelled: true);
                     }
 
                     if (++inspectedEntries % 32 == 0)
                     {
-                        progress?.Report(new DiscoveryProgress(entry, files.Count, skipped.Count));
+                        ReportProgress(progress, new DiscoveryProgress(entry, files.Count, skipped.Count));
                         await Task.Yield();
                     }
 
@@ -88,10 +117,25 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
             {
                 skipped.Add(new SkippedDiscoveryItem(directory, DiscoverySkipReason.UnstableOrDisappeared));
             }
+
+            if (!WindowsFileInspector.TryInspectDirectory(directory, out WindowsFileInspector.FileSnapshot? directoryAfter)
+                || directoryAfter is null
+                || directoryAfter.Identity != directoryBefore.Identity
+                || (directoryAfter.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != FileAttributes.Directory)
+            {
+                files.RemoveRange(fileCountBefore, files.Count - fileCountBefore);
+                skipped.RemoveRange(skipCountBefore, skipped.Count - skipCountBefore);
+                while (directories.Count > pendingDirectoryCountBefore)
+                {
+                    directories.Pop();
+                }
+
+                skipped.Add(new SkippedDiscoveryItem(directory, DiscoverySkipReason.UnstableOrDisappeared));
+            }
         }
 
-        progress?.Report(new DiscoveryProgress(string.Empty, files.Count, skipped.Count));
-        return new DiscoveryResult(files, skipped, false);
+        ReportProgress(progress, new DiscoveryProgress(string.Empty, files.Count, skipped.Count));
+        return Snapshot(files, skipped, wasCancelled: false);
     }
 
     private static void InspectEntry(
@@ -126,31 +170,14 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
 
         if (isDirectory)
         {
+            DiscoverySkipReason? policyReason = GetPolicySkipReason(attributes, policy);
+            if (policyReason is not null)
+            {
+                skipped.Add(new SkippedDiscoveryItem(entry, policyReason.Value));
+                return;
+            }
+
             directories.Push(entry);
-            return;
-        }
-
-        if ((attributes & FileAttributes.Offline) != 0)
-        {
-            skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.Offline));
-            return;
-        }
-
-        if (!policy.IncludeHiddenFiles && (attributes & FileAttributes.Hidden) != 0)
-        {
-            skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.HiddenByPolicy));
-            return;
-        }
-
-        if (!policy.IncludeSystemFiles && (attributes & FileAttributes.System) != 0)
-        {
-            skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.SystemByPolicy));
-            return;
-        }
-
-        if (!policy.IncludeEncryptedFiles && (attributes & FileAttributes.Encrypted) != 0)
-        {
-            skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.Encrypted));
             return;
         }
 
@@ -168,14 +195,28 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
                 return;
             }
 
+            if ((snapshot.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.ReparsePoint));
+                return;
+            }
+
+            DiscoverySkipReason? policyReason = GetPolicySkipReason(snapshot.Attributes, policy);
+            if (policyReason is not null)
+            {
+                skipped.Add(new SkippedDiscoveryItem(entry, policyReason.Value));
+                return;
+            }
+
             files.Add(new DiscoveredFile(
                 Path.GetFullPath(entry),
                 Path.GetFileName(entry),
                 Path.GetExtension(entry),
                 snapshot.Length,
                 snapshot.LastWriteTimeUtc,
+                snapshot.ChangeTimeUtc,
                 snapshot.Identity,
-                attributes));
+                snapshot.Attributes));
         }
         catch (UnauthorizedAccessException)
         {
@@ -192,6 +233,43 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
         catch (InvalidOperationException)
         {
             skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.IdentityUnavailable));
+        }
+    }
+
+    private static DiscoverySkipReason? GetPolicySkipReason(FileAttributes attributes, DiscoveryPolicy policy)
+    {
+        if ((attributes & FileAttributes.Offline) != 0)
+        {
+            return DiscoverySkipReason.Offline;
+        }
+
+        if (!policy.IncludeHiddenFiles && (attributes & FileAttributes.Hidden) != 0)
+        {
+            return DiscoverySkipReason.HiddenByPolicy;
+        }
+
+        if (!policy.IncludeSystemFiles && (attributes & FileAttributes.System) != 0)
+        {
+            return DiscoverySkipReason.SystemByPolicy;
+        }
+
+        return !policy.IncludeEncryptedFiles && (attributes & FileAttributes.Encrypted) != 0
+            ? DiscoverySkipReason.Encrypted
+            : null;
+    }
+
+    private static DiscoveryResult Snapshot(List<DiscoveredFile> files, List<SkippedDiscoveryItem> skipped, bool wasCancelled) =>
+        new(Array.AsReadOnly(files.ToArray()), Array.AsReadOnly(skipped.ToArray()), wasCancelled);
+
+    private static void ReportProgress(IProgress<DiscoveryProgress>? progress, DiscoveryProgress value)
+    {
+        try
+        {
+            progress?.Report(value);
+        }
+        catch (Exception)
+        {
+            // Progress is observational and must not change discovery correctness.
         }
     }
 

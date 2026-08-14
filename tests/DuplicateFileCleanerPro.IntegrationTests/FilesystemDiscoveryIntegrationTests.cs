@@ -29,6 +29,20 @@ public sealed class FilesystemDiscoveryIntegrationTests
     }
 
     [TestMethod]
+    public async Task DiscoversLongUnicodePathsWithoutTruncation()
+    {
+        using TemporaryCorpus corpus = new();
+        string relativeDirectory = string.Join(Path.DirectorySeparatorChar, Enumerable.Range(0, 14).Select(index => $"segment-{index:D2}-長い名前"));
+        string path = corpus.Write(Path.Combine(relativeDirectory, "résumé-副本.txt"));
+        Assert.IsGreaterThan(260, path.Length);
+
+        DiscoveryResult result = await DiscoverAsync(corpus.Root);
+
+        Assert.HasCount(1, result.Files);
+        Assert.AreEqual(Path.GetFullPath(path), result.Files[0].NormalizedPath);
+    }
+
+    [TestMethod]
     public void NormalizationDeduplicatesNestedRootsAndDoesNotMatchSimilarSiblingPrefix()
     {
         using TemporaryCorpus corpus = new();
@@ -42,6 +56,20 @@ public sealed class FilesystemDiscoveryIntegrationTests
 
         Assert.HasCount(2, result.Roots);
         CollectionAssert.AreEquivalent(new[] { Path.GetFullPath(data), Path.GetFullPath(database) }, result.Roots.Select(root => root.NormalizedPath).ToArray());
+    }
+
+    [TestMethod]
+    public void NormalizationAcceptsExtendedLocalSyntaxButRejectsUncAndDevicePaths()
+    {
+        using TemporaryCorpus corpus = new();
+        string extendedLocal = @"\\?\" + corpus.Root;
+
+        RootNormalizationResult result = new WindowsScanRootNormalizer().Normalize([extendedLocal, @"\\server\share", @"\\.\C:\"]);
+
+        Assert.HasCount(1, result.Roots);
+        Assert.AreEqual(Path.GetFullPath(corpus.Root), result.Roots[0].NormalizedPath);
+        Assert.HasCount(2, result.RejectedRoots);
+        Assert.IsTrue(result.RejectedRoots.All(item => item.Reason == DiscoverySkipReason.NetworkLocation));
     }
 
     [TestMethod]
@@ -83,6 +111,43 @@ public sealed class FilesystemDiscoveryIntegrationTests
     }
 
     [TestMethod]
+    public async Task ReparseFilesAreNeverFollowedWhenSupported()
+    {
+        using TemporaryCorpus corpus = new();
+        string target = corpus.Write("target.txt", "outside target");
+        string link = Path.Combine(corpus.Root, "linked.txt");
+        try
+        {
+            File.CreateSymbolicLink(link, target);
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+        {
+            Assert.Inconclusive("File symbolic links are not permitted in this test environment.");
+        }
+
+        DiscoveryResult result = await DiscoverAsync(corpus.Root);
+
+        Assert.HasCount(1, result.Files);
+        Assert.IsTrue(result.SkippedItems.Any(item => item.Path == link && item.Reason == DiscoverySkipReason.ReparsePoint));
+    }
+
+    [TestMethod]
+    public async Task HiddenPolicyIsAppliedFromTheStableHandleSnapshot()
+    {
+        using TemporaryCorpus corpus = new();
+        string hidden = corpus.Write("hidden.txt");
+        File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+
+        DiscoveryResult excluded = await DiscoverAsync(corpus.Root);
+        RootNormalizationResult roots = new WindowsScanRootNormalizer().Normalize([corpus.Root]);
+        DiscoveryResult included = await new WindowsFileDiscoveryService().DiscoverAsync(roots.Roots, new DiscoveryPolicy(IncludeHiddenFiles: true));
+
+        Assert.IsEmpty(excluded.Files);
+        Assert.IsTrue(excluded.SkippedItems.Any(item => item.Reason == DiscoverySkipReason.HiddenByPolicy));
+        Assert.HasCount(1, included.Files);
+    }
+
+    [TestMethod]
     public async Task NamedAlternateStreamIsSkippedOnNtfs()
     {
         using TemporaryCorpus corpus = new();
@@ -113,6 +178,36 @@ public sealed class FilesystemDiscoveryIntegrationTests
         DiscoveryResult result = await new WindowsFileDiscoveryService().DiscoverAsync([new ScanRoot(corpus.Root)], new DiscoveryPolicy(), cancellationToken: cancellation.Token);
         Assert.IsTrue(result.WasCancelled);
         Assert.IsEmpty(result.Files);
+    }
+
+    [TestMethod]
+    public async Task CancellationTriggeredByRealEnumerationProgressStopsPromptly()
+    {
+        using TemporaryCorpus corpus = new();
+        for (int index = 0; index < 512; index++)
+        {
+            corpus.Write($"cancel-progress/{index:D4}.txt");
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        var progress = new CancellingDiscoveryProgress(cancellation);
+        DiscoveryResult result = await new WindowsFileDiscoveryService().DiscoverAsync([new ScanRoot(corpus.Root)], new DiscoveryPolicy(), progress, cancellation.Token);
+
+        Assert.IsTrue(result.WasCancelled);
+        Assert.IsLessThan(512, result.Files.Count);
+    }
+
+    [TestMethod]
+    public async Task ThrowingProgressSubscriberCannotChangeDiscoveryResults()
+    {
+        using TemporaryCorpus corpus = new();
+        corpus.Write("one.txt");
+        corpus.Write("two.txt");
+
+        DiscoveryResult result = await new WindowsFileDiscoveryService().DiscoverAsync([new ScanRoot(corpus.Root)], new DiscoveryPolicy(), new ThrowingDiscoveryProgress());
+
+        Assert.HasCount(2, result.Files);
+        Assert.IsFalse(result.WasCancelled);
     }
 
     [TestMethod]
@@ -202,6 +297,22 @@ public sealed class FilesystemDiscoveryIntegrationTests
         RootNormalizationResult normalized = new WindowsScanRootNormalizer().Normalize([root]);
         Assert.HasCount(1, normalized.Roots);
         return await new WindowsFileDiscoveryService().DiscoverAsync(normalized.Roots, new DiscoveryPolicy());
+    }
+
+    private sealed class CancellingDiscoveryProgress(CancellationTokenSource cancellation) : IProgress<DiscoveryProgress>
+    {
+        public void Report(DiscoveryProgress value)
+        {
+            if (value.FilesDiscovered >= 31)
+            {
+                cancellation.Cancel();
+            }
+        }
+    }
+
+    private sealed class ThrowingDiscoveryProgress : IProgress<DiscoveryProgress>
+    {
+        public void Report(DiscoveryProgress value) => throw new InvalidOperationException("Progress consumer failure");
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]

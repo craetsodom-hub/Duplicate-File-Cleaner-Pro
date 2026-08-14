@@ -13,13 +13,17 @@ public enum ContentAnalysisFailureReason
 
 public sealed record ContentDigest
 {
+    private readonly byte[] bytes;
+
     public ContentDigest(byte[] bytes)
     {
         ArgumentNullException.ThrowIfNull(bytes);
-        Bytes = bytes.ToArray();
+        this.bytes = bytes.ToArray();
     }
 
-    public byte[] Bytes { get; }
+    internal ReadOnlySpan<byte> Bytes => bytes;
+
+    public byte[] ToArray() => bytes.ToArray();
 }
 
 public sealed record ContentHashOutcome(
@@ -55,6 +59,15 @@ public interface IContentAnalysisService
         DiscoveredFile left,
         DiscoveredFile right,
         CancellationToken cancellationToken = default);
+
+    Task<ContentValidationOutcome> ValidateAsync(DiscoveredFile file, CancellationToken cancellationToken = default);
+}
+
+public sealed record ContentValidationOutcome(bool Succeeded, ContentAnalysisFailureReason? FailureReason)
+{
+    public static ContentValidationOutcome Valid() => new(true, null);
+
+    public static ContentValidationOutcome Failure(ContentAnalysisFailureReason reason) => new(false, reason);
 }
 
 public sealed record DuplicateFileGroup(

@@ -2,7 +2,8 @@ namespace DuplicateFileCleanerPro.Core.Discovery;
 
 public sealed record ScanRoot(string NormalizedPath);
 
-public readonly record struct PhysicalFileIdentity(uint VolumeSerialNumber, ulong FileId);
+/// <summary>Stable Windows physical identity: volume serial plus the complete 128-bit file ID.</summary>
+public readonly record struct PhysicalFileIdentity(ulong VolumeSerialNumber, ulong FileIdLow, ulong FileIdHigh);
 
 public sealed record DiscoveredFile(
     string NormalizedPath,
@@ -10,6 +11,7 @@ public sealed record DiscoveredFile(
     string Extension,
     long Length,
     DateTimeOffset LastWriteTimeUtc,
+    DateTimeOffset ChangeTimeUtc,
     PhysicalFileIdentity PhysicalIdentity,
     FileAttributes Attributes);
 

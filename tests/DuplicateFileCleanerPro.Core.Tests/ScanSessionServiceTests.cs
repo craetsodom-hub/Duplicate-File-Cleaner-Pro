@@ -92,7 +92,117 @@ public sealed class ScanSessionServiceTests
         Assert.IsNotNull(result.Failure);
     }
 
-    private static DiscoveredFile File(string path, long length, ulong id) => new(path, Path.GetFileName(path), Path.GetExtension(path), length, DateTimeOffset.UnixEpoch, new PhysicalFileIdentity(1, id), FileAttributes.Normal);
+    [TestMethod]
+    public async Task OverlappingSessionIsRejectedAndServiceRecovers()
+    {
+        var discovery = new ControlledDiscovery();
+        using var service = new ScanSessionService(discovery, new FakeAnalysis());
+        Task<ScanSessionResult> first = service.RunAsync([new ScanRoot(@"C:\First")], new DiscoveryPolicy());
+        await discovery.Started.Task;
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.RunAsync([new ScanRoot(@"C:\Second")], new DiscoveryPolicy()));
+        discovery.Complete();
+        Assert.AreEqual(ScanSessionState.Completed, (await first).State);
+        Assert.AreEqual(ScanSessionState.Completed, (await service.RunAsync([new ScanRoot(@"C:\Third")], new DiscoveryPolicy())).State);
+    }
+
+    [TestMethod]
+    public async Task SelectedRootsAreSnapshottedBeforeWorkerExecution()
+    {
+        var roots = new List<ScanRoot> { new(@"C:\Original") };
+        var discovery = new RecordingDiscovery();
+        using var service = new ScanSessionService(discovery, new FakeAnalysis());
+
+        Task<ScanSessionResult> running = service.RunAsync(roots, new DiscoveryPolicy());
+        roots[0] = new ScanRoot(@"C:\Mutated");
+        await running;
+
+        Assert.HasCount(1, discovery.Paths);
+        Assert.AreEqual(@"C:\Original", discovery.Paths[0]);
+    }
+
+    [TestMethod]
+    public async Task SynchronouslyCompletingDependenciesStillRunOffTheCallingThread()
+    {
+        var discovery = new ThreadRecordingDiscovery();
+        using var service = new ScanSessionService(discovery, new FakeAnalysis());
+        var taskReady = new TaskCompletionSource<Task<ScanSessionResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int callerThread = 0;
+        var caller = new Thread(() =>
+        {
+            callerThread = Environment.CurrentManagedThreadId;
+            taskReady.TrySetResult(service.RunAsync([new ScanRoot(@"C:\Test")], new DiscoveryPolicy()));
+        });
+
+        caller.Start();
+        Task<ScanSessionResult> running = await taskReady.Task;
+        await running;
+        caller.Join();
+
+        Assert.AreNotEqual(callerThread, discovery.ThreadId);
+    }
+
+    [TestMethod]
+    public async Task CancellationAtFinalVerificationCannotBecomeCompletedProgressOrResult()
+    {
+        DiscoveredFile first = File("a.bin", 4, 1);
+        DiscoveredFile second = File("b.bin", 4, 2);
+        using var cancellation = new CancellationTokenSource();
+        var progress = new CancellingProgress(cancellation);
+        using var service = new ScanSessionService(new FakeDiscovery([first, second]), new FakeAnalysis());
+
+        ScanSessionResult result = await service.RunAsync([new ScanRoot(@"C:\Test")], new DiscoveryPolicy(), progress, cancellation.Token);
+
+        Assert.AreEqual(ScanSessionState.Cancelled, result.State);
+        Assert.IsFalse(progress.Items.Any(item => item.State == ScanSessionState.Completed));
+    }
+
+    [TestMethod]
+    public async Task AnalysisProgressIsBoundedMonotonicAndVerificationIsExplicit()
+    {
+        DiscoveredFile first = File("a.bin", 4, 1);
+        DiscoveredFile second = File("b.bin", 4, 2);
+        var items = new List<ScanSessionProgress>();
+        using var service = new ScanSessionService(new FakeDiscovery([first, second]), new FakeAnalysis());
+
+        await service.RunAsync([new ScanRoot(@"C:\Test")], new DiscoveryPolicy(), new CollectProgress(items));
+
+        ScanSessionProgress[] analysis = items.Where(item => item.State == ScanSessionState.Analyzing).ToArray();
+        Assert.IsTrue(analysis.All(item => item.BytesProcessed >= 0 && item.BytesProcessed <= item.TotalCandidateBytes));
+        Assert.IsTrue(analysis.Zip(analysis.Skip(1), (left, right) => right.BytesProcessed >= left.BytesProcessed).All(value => value));
+        Assert.IsTrue(analysis.Any(item => item.IsVerifying));
+        Assert.AreEqual(ScanSessionState.Completed, items[^1].State);
+    }
+
+    [TestMethod]
+    public async Task CompletionOwnsAReadOnlyDiscoverySnapshot()
+    {
+        DiscoveredFile first = File("a.bin", 1, 1);
+        var mutableFiles = new List<DiscoveredFile> { first };
+        using var service = new ScanSessionService(new FakeDiscovery(mutableFiles), new FakeAnalysis());
+
+        ScanSessionResult result = await service.RunAsync([new ScanRoot(@"C:\Test")], new DiscoveryPolicy());
+        mutableFiles.Clear();
+
+        Assert.IsNotNull(result.CompletedResult);
+        Assert.HasCount(1, result.CompletedResult.Discovery.Files);
+        Assert.ThrowsExactly<NotSupportedException>(() => ((IList<DiscoveredFile>)result.CompletedResult.Discovery.Files).Add(first));
+    }
+
+    [TestMethod]
+    public async Task ThrowingProgressSubscriberCannotChangeSessionCorrectness()
+    {
+        DiscoveredFile first = File("a.bin", 4, 1);
+        DiscoveredFile second = File("b.bin", 4, 2);
+        using var service = new ScanSessionService(new FakeDiscovery([first, second]), new FakeAnalysis());
+
+        ScanSessionResult result = await service.RunAsync([new ScanRoot(@"C:\Test")], new DiscoveryPolicy(), new ThrowingSessionProgress());
+
+        Assert.AreEqual(ScanSessionState.Completed, result.State);
+        Assert.IsNotNull(result.CompletedResult);
+    }
+
+    private static DiscoveredFile File(string path, long length, ulong id) => new(path, Path.GetFileName(path), Path.GetExtension(path), length, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, new PhysicalFileIdentity(1, id, 0), FileAttributes.Normal);
 
     private sealed class FakeDiscovery(IReadOnlyList<DiscoveredFile> files) : IFileDiscoveryService
     {
@@ -107,6 +217,7 @@ public sealed class ScanSessionServiceTests
     {
         public Task<ContentHashOutcome> HashAsync(DiscoveredFile file, CancellationToken cancellationToken = default) => Task.FromResult(ContentHashOutcome.Success(new ContentDigest([1])));
         public Task<ContentComparisonOutcome> CompareAsync(DiscoveredFile left, DiscoveredFile right, CancellationToken cancellationToken = default) => Task.FromResult(ContentComparisonOutcome.Equal());
+        public Task<ContentValidationOutcome> ValidateAsync(DiscoveredFile file, CancellationToken cancellationToken = default) => Task.FromResult(ContentValidationOutcome.Valid());
     }
 
     private sealed class DelayedDiscovery : IFileDiscoveryService
@@ -130,6 +241,7 @@ public sealed class ScanSessionServiceTests
         }
 
         public Task<ContentComparisonOutcome> CompareAsync(DiscoveredFile left, DiscoveredFile right, CancellationToken cancellationToken = default) => Task.FromResult(ContentComparisonOutcome.Different());
+        public Task<ContentValidationOutcome> ValidateAsync(DiscoveredFile file, CancellationToken cancellationToken = default) => Task.FromResult(ContentValidationOutcome.Valid());
     }
 
     private sealed class FailingDiscovery : IFileDiscoveryService
@@ -137,8 +249,61 @@ public sealed class ScanSessionServiceTests
         public Task<DiscoveryResult> DiscoverAsync(IEnumerable<ScanRoot> roots, DiscoveryPolicy policy, IProgress<DiscoveryProgress>? progress = null, CancellationToken cancellationToken = default) => throw new IOException("Generated failure");
     }
 
+    private sealed class ControlledDiscovery : IFileDiscoveryService
+    {
+        private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<DiscoveryResult> DiscoverAsync(IEnumerable<ScanRoot> roots, DiscoveryPolicy policy, IProgress<DiscoveryProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+            return new DiscoveryResult([], [], false);
+        }
+
+        public void Complete() => release.TrySetResult();
+    }
+
+    private sealed class RecordingDiscovery : IFileDiscoveryService
+    {
+        public string[] Paths { get; private set; } = [];
+        public Task<DiscoveryResult> DiscoverAsync(IEnumerable<ScanRoot> roots, DiscoveryPolicy policy, IProgress<DiscoveryProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            Paths = roots.Select(root => root.NormalizedPath).ToArray();
+            return Task.FromResult(new DiscoveryResult([], [], false));
+        }
+    }
+
+    private sealed class ThreadRecordingDiscovery : IFileDiscoveryService
+    {
+        public int ThreadId { get; private set; }
+        public Task<DiscoveryResult> DiscoverAsync(IEnumerable<ScanRoot> roots, DiscoveryPolicy policy, IProgress<DiscoveryProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            ThreadId = Environment.CurrentManagedThreadId;
+            return Task.FromResult(new DiscoveryResult([], [], false));
+        }
+    }
+
+    private sealed class CancellingProgress(CancellationTokenSource cancellation) : IProgress<ScanSessionProgress>
+    {
+        public List<ScanSessionProgress> Items { get; } = [];
+        public void Report(ScanSessionProgress value)
+        {
+            Items.Add(value);
+            if (value.State == ScanSessionState.Analyzing && value.IsVerifying)
+            {
+                cancellation.Cancel();
+            }
+        }
+    }
+
     private sealed class CollectProgress(List<ScanSessionProgress> target) : IProgress<ScanSessionProgress>
     {
         public void Report(ScanSessionProgress value) => target.Add(value);
+    }
+
+    private sealed class ThrowingSessionProgress : IProgress<ScanSessionProgress>
+    {
+        public void Report(ScanSessionProgress value) => throw new InvalidOperationException("Progress consumer failure");
     }
 }

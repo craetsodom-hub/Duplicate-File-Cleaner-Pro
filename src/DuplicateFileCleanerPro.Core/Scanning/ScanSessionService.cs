@@ -5,7 +5,9 @@ namespace DuplicateFileCleanerPro.Core.Scanning;
 
 public sealed class ScanSessionService(IFileDiscoveryService discovery, IContentAnalysisService contentAnalysis) : IDisposable
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly object _lifecycle = new();
+    private bool _active;
+    private bool _disposed;
 
     public async Task<ScanSessionResult> RunAsync(
         IEnumerable<ScanRoot> roots,
@@ -14,9 +16,15 @@ public sealed class ScanSessionService(IFileDiscoveryService discovery, IContent
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(roots);
-        if (!await _gate.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
+        lock (_lifecycle)
         {
-            throw new InvalidOperationException("A scan session is already running.");
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_active)
+            {
+                throw new InvalidOperationException("A scan session is already running.");
+            }
+
+            _active = true;
         }
 
         try
@@ -27,41 +35,11 @@ public sealed class ScanSessionService(IFileDiscoveryService discovery, IContent
                 throw new InvalidOperationException("At least one scan root is required.");
             }
 
-            progress?.Report(new ScanSessionProgress(ScanSessionState.Preparing, string.Empty, 0, 0, 0, 0, 0, 0));
+            ReportProgress(progress, new ScanSessionProgress(ScanSessionState.Preparing, string.Empty, 0, 0, 0, 0, 0, 0, false));
             cancellationToken.ThrowIfCancellationRequested();
-            progress?.Report(new ScanSessionProgress(ScanSessionState.Discovering, string.Empty, 0, 0, 0, 0, 0, 0));
-            var discoveryProgress = new RelayProgress<DiscoveryProgress>(update =>
-                progress?.Report(new ScanSessionProgress(ScanSessionState.Discovering, update.CurrentPath, update.FilesDiscovered, 0, 0, 0, 0, update.SkippedItemCount)));
-            DiscoveryResult discoveryResult = await Task.Run(
-                () => discovery.DiscoverAsync(rootSnapshot, policy, discoveryProgress, cancellationToken),
+            return await Task.Run(
+                () => RunPipelineAsync(rootSnapshot, policy, progress, cancellationToken),
                 CancellationToken.None).ConfigureAwait(false);
-            if (discoveryResult.WasCancelled || cancellationToken.IsCancellationRequested)
-            {
-                return ScanSessionResult.Cancelled();
-            }
-
-            List<DiscoveredFile> candidates = discoveryResult.Files
-                .GroupBy(file => file.PhysicalIdentity)
-                .Select(group => group.First())
-                .GroupBy(file => file.Length)
-                .Where(group => group.Count() > 1)
-                .SelectMany(group => group)
-                .ToList();
-            long totalCandidateBytes = candidates.Aggregate(0L, (total, file) => checked(total + file.Length));
-            progress?.Report(new ScanSessionProgress(ScanSessionState.Analyzing, string.Empty, discoveryResult.Files.Count, 0, 0, totalCandidateBytes, 0, discoveryResult.SkippedItems.Count));
-
-            var detectionProgress = new RelayProgress<DuplicateDetectionProgress>(update =>
-                progress?.Report(new ScanSessionProgress(ScanSessionState.Analyzing, update.CurrentPath, discoveryResult.Files.Count, update.CandidatesProcessed, update.BytesProcessed, update.TotalCandidateBytes, update.VerifiedGroupCount, discoveryResult.SkippedItems.Count + update.SkippedItemCount)));
-            ExactDuplicateDetectionResult detectionResult = await Task.Run(
-                () => ExactDuplicateDetector.DetectAsync(discoveryResult.Files, contentAnalysis, detectionProgress, cancellationToken),
-                CancellationToken.None).ConfigureAwait(false);
-            if (detectionResult.WasCancelled || cancellationToken.IsCancellationRequested)
-            {
-                return ScanSessionResult.Cancelled();
-            }
-
-            progress?.Report(new ScanSessionProgress(ScanSessionState.Completed, string.Empty, discoveryResult.Files.Count, candidates.Count, totalCandidateBytes, totalCandidateBytes, detectionResult.Groups.Count, discoveryResult.SkippedItems.Count + detectionResult.SkippedItems.Count));
-            return ScanSessionResult.Completed(new CompletedScanResult(discoveryResult, detectionResult));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -73,11 +51,74 @@ public sealed class ScanSessionService(IFileDiscoveryService discovery, IContent
         }
         finally
         {
-            _gate.Release();
+            lock (_lifecycle)
+            {
+                _active = false;
+            }
         }
     }
 
-    public void Dispose() => _gate.Dispose();
+    private async Task<ScanSessionResult> RunPipelineAsync(
+        IReadOnlyList<ScanRoot> roots,
+        DiscoveryPolicy policy,
+        IProgress<ScanSessionProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        ReportProgress(progress, new ScanSessionProgress(ScanSessionState.Discovering, string.Empty, 0, 0, 0, 0, 0, 0, false));
+        var discoveryProgress = new RelayProgress<DiscoveryProgress>(update =>
+            ReportProgress(progress, new ScanSessionProgress(ScanSessionState.Discovering, update.CurrentPath, update.FilesDiscovered, 0, 0, 0, 0, update.SkippedItemCount, false)));
+        DiscoveryResult discovered = await discovery.DiscoverAsync(roots, policy, discoveryProgress, cancellationToken).ConfigureAwait(false);
+        DiscoveryResult discoveryResult = new(
+            Array.AsReadOnly(discovered.Files.ToArray()),
+            Array.AsReadOnly(discovered.SkippedItems.ToArray()),
+            discovered.WasCancelled);
+        if (discoveryResult.WasCancelled || cancellationToken.IsCancellationRequested)
+        {
+            return ScanSessionResult.Cancelled();
+        }
+
+        List<DiscoveredFile> candidates = discoveryResult.Files
+            .GroupBy(file => file.PhysicalIdentity)
+            .Select(group => group.First())
+            .GroupBy(file => file.Length)
+            .Where(group => group.Count() > 1)
+            .SelectMany(group => group)
+            .ToList();
+        long totalCandidateBytes = candidates.Aggregate(0L, (total, file) => checked(total + file.Length));
+        ReportProgress(progress, new ScanSessionProgress(ScanSessionState.Analyzing, string.Empty, discoveryResult.Files.Count, 0, 0, totalCandidateBytes, 0, discoveryResult.SkippedItems.Count, false));
+
+        var detectionProgress = new RelayProgress<DuplicateDetectionProgress>(update =>
+            ReportProgress(progress, new ScanSessionProgress(ScanSessionState.Analyzing, update.CurrentPath, discoveryResult.Files.Count, update.CandidatesProcessed, update.BytesProcessed, update.TotalCandidateBytes, update.VerifiedGroupCount, discoveryResult.SkippedItems.Count + update.SkippedItemCount, update.IsVerifying)));
+        ExactDuplicateDetectionResult detectionResult = await ExactDuplicateDetector.DetectAsync(discoveryResult.Files, contentAnalysis, detectionProgress, cancellationToken).ConfigureAwait(false);
+        if (detectionResult.WasCancelled || cancellationToken.IsCancellationRequested)
+        {
+            return ScanSessionResult.Cancelled();
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        ReportProgress(progress, new ScanSessionProgress(ScanSessionState.Completed, string.Empty, discoveryResult.Files.Count, candidates.Count, totalCandidateBytes, totalCandidateBytes, detectionResult.Groups.Count, discoveryResult.SkippedItems.Count + detectionResult.SkippedItems.Count, false));
+        return ScanSessionResult.Completed(new CompletedScanResult(discoveryResult, detectionResult));
+    }
+
+    public void Dispose()
+    {
+        lock (_lifecycle)
+        {
+            _disposed = true;
+        }
+    }
+
+    private static void ReportProgress(IProgress<ScanSessionProgress>? progress, ScanSessionProgress value)
+    {
+        try
+        {
+            progress?.Report(value);
+        }
+        catch (Exception)
+        {
+            // Progress is observational and must not change session correctness.
+        }
+    }
 
     private sealed class RelayProgress<T>(Action<T> report) : IProgress<T>
     {
