@@ -8,5 +8,6 @@
     <PackageReference Include="MSTest" />
     <ProjectReference Include="..\..\src\DuplicateFileCleanerPro.Core\DuplicateFileCleanerPro.Core.csproj" />
     <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Results\ResultsReviewViewModel.cs" Link="Results\ResultsReviewViewModel.cs" />
+    <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Cleanup\CleanupWorkflowViewModel.cs" Link="Cleanup\CleanupWorkflowViewModel.cs" />
   </ItemGroup>
 </Project>

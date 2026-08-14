@@ -79,4 +79,60 @@
   <data name="ResultsAscending" xml:space="preserve"><value>Ascending</value></data>
   <data name="ResultsDescending" xml:space="preserve"><value>Descending</value></data>
   <data name="ResultCandidatesFormat" xml:space="preserve"><value>{0} files · {1}</value></data>
+  <data name="ReviewCleanupButton.Content" xml:space="preserve"><value>Review cleanup</value></data>
+  <data name="ReviewCleanupButton.AutomationProperties.Name" xml:space="preserve"><value>Review selected candidates for cleanup</value></data>
+  <data name="ResultsStaleNotice.Title" xml:space="preserve"><value>Rescan required</value></data>
+  <data name="ResultsStaleNotice.Message" xml:space="preserve"><value>Cleanup was attempted from this scan. Scan again before reviewing more cleanup candidates.</value></data>
+  <data name="CleanupBackButton.Content" xml:space="preserve"><value>Back to results</value></data>
+  <data name="CleanupRescanButton.Content" xml:space="preserve"><value>Scan again</value></data>
+  <data name="CleanupReviewSummaryTitle.Text" xml:space="preserve"><value>Selected for cleanup</value></data>
+  <data name="CleanupCandidateFilesLabel.Text" xml:space="preserve"><value>Candidate files</value></data>
+  <data name="CleanupCandidateSpaceLabel.Text" xml:space="preserve"><value>Candidate space</value></data>
+  <data name="CleanupAffectedGroupsLabel.Text" xml:space="preserve"><value>Affected groups</value></data>
+  <data name="CleanupReviewListTitle.Text" xml:space="preserve"><value>Files to review</value></data>
+  <data name="CleanupReviewList.AutomationProperties.Name" xml:space="preserve"><value>Selected candidate files to review before cleanup</value></data>
+  <data name="CleanupRecycleBinNotice.Title" xml:space="preserve"><value>Windows Recycle Bin</value></data>
+  <data name="CleanupRecycleBinNotice.Message" xml:space="preserve"><value>Each candidate is checked again. At least one independent verified copy is intended to remain.</value></data>
+  <data name="CleanupChangeSelectionButton.Content" xml:space="preserve"><value>Change selection</value></data>
+  <data name="ConfirmCleanupButton.Content" xml:space="preserve"><value>Move to Recycle Bin</value></data>
+  <data name="ConfirmCleanupButton.AutomationProperties.Name" xml:space="preserve"><value>Confirm cleanup review and request Recycle Bin confirmation</value></data>
+  <data name="CleanupProcessedLabel.Text" xml:space="preserve"><value>Processed</value></data>
+  <data name="CleanupMovedLabel.Text" xml:space="preserve"><value>Moved to Recycle Bin</value></data>
+  <data name="CleanupSkippedLabel.Text" xml:space="preserve"><value>Skipped</value></data>
+  <data name="CleanupFailedLabel.Text" xml:space="preserve"><value>Failed</value></data>
+  <data name="CleanupReclaimedLabel.Text" xml:space="preserve"><value>Reclaimed</value></data>
+  <data name="CancelCleanupButton.Content" xml:space="preserve"><value>Cancel cleanup</value></data>
+  <data name="CancelCleanupButton.AutomationProperties.Name" xml:space="preserve"><value>Cancel cleanup after the current safe operation</value></data>
+  <data name="CleanupOutcomesTitle.Text" xml:space="preserve"><value>Details</value></data>
+  <data name="CleanupOutcomeList.AutomationProperties.Name" xml:space="preserve"><value>Cleanup outcome details</value></data>
+  <data name="CleanupReviewTitle" xml:space="preserve"><value>Review cleanup</value></data>
+  <data name="CleanupReviewDescription" xml:space="preserve"><value>Review the files selected for the Windows Recycle Bin.</value></data>
+  <data name="CleanupReviewSummaryFormat" xml:space="preserve"><value>Candidate files: {0} · Candidate space: {1} · Affected groups: {2}</value></data>
+  <data name="CleanupConfirmTitleFormat" xml:space="preserve"><value>Move {0} selected files to the Recycle Bin?</value></data>
+  <data name="CleanupConfirmDescriptionFormat" xml:space="preserve"><value>Selected space: {0}&#x0A;&#x0A;Every file is verified again before it is moved. Files that changed or cannot be verified are skipped.</value></data>
+  <data name="MoveToRecycleBinButton" xml:space="preserve"><value>Move to Recycle Bin</value></data>
+  <data name="CleanupConfirmCancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="CleanupProgressTitle" xml:space="preserve"><value>Moving selected files</value></data>
+  <data name="CleanupProgressDescription" xml:space="preserve"><value>Only independently verified candidate files are moved to the Windows Recycle Bin.</value></data>
+  <data name="CleanupPreparing" xml:space="preserve"><value>Preparing cleanup</value></data>
+  <data name="CleanupVerifyingActivity" xml:space="preserve"><value>Verifying candidates and moving only files that remain safe</value></data>
+  <data name="CleanupCancelling" xml:space="preserve"><value>Stopping after the current safe operation</value></data>
+  <data name="CleanupProcessedFormat" xml:space="preserve"><value>{0} of {1}</value></data>
+  <data name="CleanupCompletedTitle" xml:space="preserve"><value>Cleanup complete</value></data>
+  <data name="CleanupCancelledTitle" xml:space="preserve"><value>Cleanup cancelled</value></data>
+  <data name="CleanupFailedTitle" xml:space="preserve"><value>Cleanup could not start</value></data>
+  <data name="CleanupCompletionDescription" xml:space="preserve"><value>These are the factual results of this cleanup attempt.</value></data>
+  <data name="CleanupCompletedSummaryFormat" xml:space="preserve"><value>{0} files moved to the Recycle Bin · {1} reclaimed</value></data>
+  <data name="CleanupNoChangesSummary" xml:space="preserve"><value>No files were moved. Candidate files may have changed or could no longer be verified.</value></data>
+  <data name="CleanupPlanningRejected" xml:space="preserve"><value>The selected review state could not be safely prepared for cleanup.</value></data>
+  <data name="CleanupUnexpectedFailure" xml:space="preserve"><value>The cleanup attempt ended before it could produce a result. No additional cleanup will start from this scan.</value></data>
+  <data name="CleanupOutcomeMoved" xml:space="preserve"><value>Moved to the Windows Recycle Bin</value></data>
+  <data name="CleanupOutcomeMissing" xml:space="preserve"><value>File is no longer available</value></data>
+  <data name="CleanupOutcomeChanged" xml:space="preserve"><value>File changed since the scan</value></data>
+  <data name="CleanupOutcomeKeeper" xml:space="preserve"><value>A verified copy could not be confirmed</value></data>
+  <data name="CleanupOutcomeVerification" xml:space="preserve"><value>File could not be verified safely</value></data>
+  <data name="CleanupOutcomePolicy" xml:space="preserve"><value>File is no longer eligible for cleanup</value></data>
+  <data name="CleanupOutcomeRecycleBinFailed" xml:space="preserve"><value>File could not be moved to the Recycle Bin</value></data>
+  <data name="CleanupOutcomeCancelled" xml:space="preserve"><value>Not processed because cleanup was cancelled</value></data>
+  <data name="CleanupOutcomePlatformFailed" xml:space="preserve"><value>Cleanup could not complete for this file</value></data>
 </root>

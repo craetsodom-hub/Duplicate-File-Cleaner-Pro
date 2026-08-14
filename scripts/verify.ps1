@@ -90,7 +90,7 @@ try {
     Assert-NoRipgrepMatch -Description 'production forbidden mutation API' -Pattern '\b(File|Directory)\.(Delete|Move|Replace|Write(AllBytes|AllText)?|Append(AllText)?|Create(SymbolicLink|HardLink)?)\b|\bDeleteFile(W|A)?\b|FileMode\.(Create|CreateNew|Append|Truncate)|SetAccessControl\s*\(|SetOwner\s*\(|SHFileOperation|FOF_WANTNUKEWARNING' -Paths @('src')
     Assert-RecycleBinBoundary
     Assert-NoRipgrepMatch -Description 'synchronous async blocking' -Pattern '\.Result\b|\.Wait\s*\(|GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(' -Paths @('src')
-    Assert-NoRipgrepMatch -Description 'QA hook leakage' -Pattern 'TemporaryQa|Phase4\.QA|QA-root|automatic root selection' -Paths @('src')
+    Assert-NoRipgrepMatch -Description 'QA hook leakage' -Pattern 'TemporaryQa|Phase4\.QA|Phase7\.QA|QA-root|automatic root selection' -Paths @('src')
     Assert-NoRipgrepMatch -Description 'network, telemetry, and upload API' -Pattern 'HttpClient|WebRequest|Socket|Telemetry|Analytics|Upload|ApplicationInsights|Sentry' -Paths @('src')
     Assert-ReferenceHashes
     & git diff --check

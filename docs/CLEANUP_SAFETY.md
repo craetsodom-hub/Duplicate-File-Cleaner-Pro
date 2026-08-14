@@ -11,3 +11,7 @@ Immediately around the Shell call, Infrastructure.Windows holds an identity-veri
 The only production destructive boundary is `IFileOperation::DeleteItem` configured with `FOFX_RECYCLEONDELETE`, `FOFX_ADDUNDORECORD`, silent/no-error UI, no recursion, and early failure. Failure or abortion returns a structured failure. There is no permanent-delete fallback, elevation, ACL change, move, rename, or overwrite path.
 
 Cleanup is intentionally partially successful. Every candidate has a precise immutable outcome. Bytes count as actually reclaimed only after the Recycle Bin operation succeeds. Cancellation stops before the next safe boundary and never attempts to roll back earlier successful Recycle Bin operations.
+
+## Cleanup UX contract
+
+The UI presents selected candidate files and candidate space only before confirmation. It reports moved files and actually reclaimed space only from the immutable cleanup result returned by Core. A review selection is snapshotted when the user explicitly confirms; later presentation changes cannot affect that operation. After an attempt, Results is marked stale and requires a new scan before another cleanup review, including when no candidate was successfully moved.

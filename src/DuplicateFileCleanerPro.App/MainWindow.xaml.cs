@@ -16,6 +16,9 @@ using System.ComponentModel;
 using Microsoft.UI.Dispatching;
 using Windows.ApplicationModel.Resources;
 using DuplicateFileCleanerPro.App.Results;
+using DuplicateFileCleanerPro.App.Cleanup;
+using DuplicateFileCleanerPro.Core.Cleanup;
+using DuplicateFileCleanerPro.Infrastructure.Windows.Cleanup;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -30,10 +33,16 @@ public sealed partial class MainWindow : Window, IDisposable
     private static readonly ResourceLoader ResourceLoader = ResourceLoader.GetForViewIndependentUse();
     private static readonly CompositeFormat ReviewWithManyRootsFormat = CompositeFormat.Parse(ResourceLoader.GetString("ReviewWithManyRoots"));
     private static readonly CompositeFormat ResultCandidatesFormat = CompositeFormat.Parse(ResourceLoader.GetString("ResultCandidatesFormat"));
+    private static readonly CompositeFormat CleanupReviewSummaryFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupReviewSummaryFormat"));
+    private static readonly CompositeFormat CleanupConfirmTitleFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupConfirmTitleFormat"));
+    private static readonly CompositeFormat CleanupConfirmDescriptionFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupConfirmDescriptionFormat"));
+    private static readonly CompositeFormat CleanupProcessedFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupProcessedFormat"));
+    private static readonly CompositeFormat CleanupCompletedSummaryFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupCompletedSummaryFormat"));
     private readonly WindowsScanRootNormalizer rootNormalizer = new();
     private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
     private readonly SafetyOperationCoordinator safetyOperations = new();
     private readonly ScanWorkflowController scanWorkflow;
+    private readonly CleanupWorkflowViewModel cleanupWorkflow;
     private readonly Stopwatch scanStopwatch = new();
     private readonly DispatcherQueueTimer elapsedTimer;
     private string? setupNotice;
@@ -48,6 +57,8 @@ public sealed partial class MainWindow : Window, IDisposable
         scanWorkflow = new ScanWorkflowController(
             new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService()),
             safetyOperations);
+        cleanupWorkflow = new CleanupWorkflowViewModel(
+            new CleanupEngine(new WindowsCleanupPlatformService(), safetyOperations));
         InitializeComponent();
         LocationsList.ItemsSource = selectedRoots;
         _windowProcedure = WindowProcedure;
@@ -111,6 +122,16 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        if (CleanupPage.Visibility == Visibility.Visible)
+        {
+            if (!ReferenceEquals(args.SelectedItem, ResultsNavigationItem))
+            {
+                ShellNavigation.SelectedItem = ResultsNavigationItem;
+            }
+
+            return;
+        }
+
         bool resultsSelected = ReferenceEquals(args.SelectedItem, ResultsNavigationItem);
         bool settingsSelected = ReferenceEquals(args.SelectedItem, SettingsNavigationItem);
         ScanScrollViewer.Visibility = resultsSelected ? Visibility.Collapsed : Visibility.Visible;
@@ -158,7 +179,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async void OnStartScanClick(object sender, RoutedEventArgs args)
     {
-        if (selectedRoots.Count == 0 || scanWorkflow.IsRunning)
+        if (selectedRoots.Count == 0 || scanWorkflow.IsRunning || cleanupWorkflow.IsActive)
         {
             return;
         }
@@ -212,8 +233,15 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnNewScanClick(object sender, RoutedEventArgs args)
     {
+        if (cleanupWorkflow.IsActive)
+        {
+            return;
+        }
+
+        cleanupWorkflow.ResetForNewScan();
         ShellNavigation.SelectedItem = ScanNavigationItem;
         ResultsPage.Visibility = Visibility.Collapsed;
+        CleanupPage.Visibility = Visibility.Collapsed;
         ScanScrollViewer.Visibility = Visibility.Visible;
         ScanPage.Visibility = Visibility.Visible;
         UpdateSetupState();
@@ -251,6 +279,8 @@ public sealed partial class MainWindow : Window, IDisposable
         ResultsEmptyTitle.Text = ResultsViewModel.HasResults ? Text("ResultsNoMatchesTitle") : Text("ResultsNoDuplicatesTitle");
         ResultsEmptyDescription.Text = ResultsViewModel.HasResults ? Text("ResultsNoMatchesDescription") : Text("ResultsNoDuplicatesDescription");
         UpdateResultsEmptyState();
+        ResultsStaleNotice.IsOpen = false;
+        CleanupPage.Visibility = Visibility.Collapsed;
         ScanScrollViewer.Visibility = Visibility.Collapsed;
         ResultsPage.Visibility = Visibility.Visible;
         ShellNavigation.SelectedItem = ResultsNavigationItem;
@@ -266,6 +296,8 @@ public sealed partial class MainWindow : Window, IDisposable
         ResultsViewModel = null;
         ResultsPage.DataContext = null;
         ResultsNavigationItem.IsEnabled = false;
+        cleanupWorkflow.ResetForNewScan();
+        ResultsStaleNotice.IsOpen = false;
     }
 
     private void OnResultsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
@@ -287,6 +319,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ResultCandidatesText.Text = string.Format(CultureInfo.CurrentCulture, ResultCandidatesFormat,
             ResultsViewModel.SelectedCandidateCount,
             ResultDisplayFormatter.FormatBytes(ResultsViewModel.SelectedCandidateBytes));
+        ReviewCleanupButton.IsEnabled = ResultsViewModel.SelectedCandidateCount > 0 && !cleanupWorkflow.RequiresRescan;
     }
 
     private void OnResultsSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
@@ -319,6 +352,203 @@ public sealed partial class MainWindow : Window, IDisposable
     private void OnExpandAllClick(object sender, RoutedEventArgs args) => ResultsViewModel?.ExpandAll();
 
     private void OnCollapseAllClick(object sender, RoutedEventArgs args) => ResultsViewModel?.CollapseAll();
+
+    private void OnReviewCleanupClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel is null || !cleanupWorkflow.BeginReview(ResultsViewModel))
+        {
+            return;
+        }
+
+        ShowCleanupReview();
+    }
+
+    private void ShowCleanupReview()
+    {
+        CleanupPageTitle.Text = Text("CleanupReviewTitle");
+        CleanupPageDescription.Text = Text("CleanupReviewDescription");
+        CleanupReviewSummaryText.Text = string.Format(
+            CultureInfo.CurrentCulture,
+            CleanupReviewSummaryFormat,
+            cleanupWorkflow.SelectedCandidateCount,
+            ResultDisplayFormatter.FormatBytes(cleanupWorkflow.SelectedCandidateBytes),
+            cleanupWorkflow.AffectedGroupCount);
+        CleanupCandidateFilesText.Text = cleanupWorkflow.SelectedCandidateCount.ToString(CultureInfo.CurrentCulture);
+        CleanupCandidateSpaceText.Text = ResultDisplayFormatter.FormatBytes(cleanupWorkflow.SelectedCandidateBytes);
+        CleanupAffectedGroupsText.Text = cleanupWorkflow.AffectedGroupCount.ToString(CultureInfo.CurrentCulture);
+        CleanupReviewList.ItemsSource = cleanupWorkflow.ReviewCandidates;
+        CleanupProgressBar.Maximum = Math.Max(1, cleanupWorkflow.SelectedCandidateCount);
+        CleanupProgressBar.Value = 0;
+        CleanupReviewPanel.Visibility = Visibility.Visible;
+        CleanupProgressPanel.Visibility = Visibility.Collapsed;
+        CleanupCompletionPanel.Visibility = Visibility.Collapsed;
+        CleanupBackButton.Visibility = Visibility.Visible;
+        CleanupRescanButton.Visibility = Visibility.Collapsed;
+        ScanScrollViewer.Visibility = Visibility.Collapsed;
+        ResultsPage.Visibility = Visibility.Collapsed;
+        CleanupPage.Visibility = Visibility.Visible;
+        ShellNavigation.SelectedItem = ResultsNavigationItem;
+    }
+
+    private async void OnConfirmCleanupClick(object sender, RoutedEventArgs args)
+    {
+        if (!cleanupWorkflow.IsReviewing)
+        {
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = ShellNavigation.XamlRoot,
+            Title = string.Format(CultureInfo.CurrentCulture, CleanupConfirmTitleFormat, cleanupWorkflow.SelectedCandidateCount),
+            Content = string.Format(CultureInfo.CurrentCulture, CleanupConfirmDescriptionFormat, ResultDisplayFormatter.FormatBytes(cleanupWorkflow.SelectedCandidateBytes)),
+            PrimaryButtonText = Text("MoveToRecycleBinButton"),
+            CloseButtonText = Text("CleanupConfirmCancelButton"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || isDisposed)
+        {
+            return;
+        }
+
+        ShowCleanupProgress();
+        var progress = new CoalescingUiProgress<CleanupProgress>(DispatcherQueue, UpdateCleanupProgress);
+        CleanupResult? result = await cleanupWorkflow.ExecuteConfirmedAsync(progress);
+        if (isDisposed)
+        {
+            return;
+        }
+
+        ShowCleanupCompletion(result);
+    }
+
+    private void ShowCleanupProgress()
+    {
+        CleanupPageTitle.Text = Text("CleanupProgressTitle");
+        CleanupPageDescription.Text = Text("CleanupProgressDescription");
+        CleanupActivityText.Text = Text("CleanupPreparing");
+        CleanupProcessedText.Text = string.Format(CultureInfo.CurrentCulture, CleanupProcessedFormat, 0, cleanupWorkflow.SelectedCandidateCount);
+        CleanupMovedText.Text = 0.ToString(CultureInfo.CurrentCulture);
+        CleanupSkippedText.Text = 0.ToString(CultureInfo.CurrentCulture);
+        CleanupReclaimedText.Text = ResultDisplayFormatter.FormatBytes(0);
+        CleanupReviewPanel.Visibility = Visibility.Collapsed;
+        CleanupProgressPanel.Visibility = Visibility.Visible;
+        CleanupCompletionPanel.Visibility = Visibility.Collapsed;
+        CleanupBackButton.Visibility = Visibility.Collapsed;
+        CleanupRescanButton.Visibility = Visibility.Collapsed;
+        CancelCleanupButton.IsEnabled = true;
+        SetCleanupNavigationActive(true);
+    }
+
+    private void UpdateCleanupProgress(CleanupProgress progress)
+    {
+        if (isDisposed || !cleanupWorkflow.IsActive)
+        {
+            return;
+        }
+
+        CleanupProgressBar.Value = progress.CandidatesProcessed;
+        CleanupActivityText.Text = Text("CleanupVerifyingActivity");
+        CleanupProcessedText.Text = string.Format(CultureInfo.CurrentCulture, CleanupProcessedFormat, progress.CandidatesProcessed, progress.CandidatesTotal);
+        CleanupMovedText.Text = progress.RecycledCount.ToString(CultureInfo.CurrentCulture);
+        CleanupSkippedText.Text = progress.SkippedCount.ToString(CultureInfo.CurrentCulture);
+        CleanupReclaimedText.Text = ResultDisplayFormatter.FormatBytes(progress.ActuallyReclaimedBytes);
+    }
+
+    private void OnCancelCleanupClick(object sender, RoutedEventArgs args)
+    {
+        CancelCleanupButton.IsEnabled = false;
+        CleanupActivityText.Text = Text("CleanupCancelling");
+        cleanupWorkflow.Cancel();
+    }
+
+    private void ShowCleanupCompletion(CleanupResult? result)
+    {
+        SetCleanupNavigationActive(false);
+        CleanupReviewPanel.Visibility = Visibility.Collapsed;
+        CleanupProgressPanel.Visibility = Visibility.Collapsed;
+        CleanupCompletionPanel.Visibility = Visibility.Visible;
+        CleanupBackButton.Visibility = Visibility.Visible;
+        CleanupRescanButton.Visibility = Visibility.Visible;
+
+        if (result is null)
+        {
+            CleanupPageTitle.Text = Text("CleanupFailedTitle");
+            CleanupPageDescription.Text = Text(cleanupWorkflow.PlanningFailureKey ?? "CleanupUnexpectedFailure");
+            CleanupCompletionTitle.Text = Text("CleanupFailedTitle");
+            CleanupCompletionSummary.Text = Text("CleanupNoChangesSummary");
+            CleanupCompletionMovedText.Text = 0.ToString(CultureInfo.CurrentCulture);
+            CleanupCompletionReclaimedText.Text = ResultDisplayFormatter.FormatBytes(0);
+            CleanupCompletionSkippedText.Text = 0.ToString(CultureInfo.CurrentCulture);
+            CleanupCompletionFailedText.Text = 0.ToString(CultureInfo.CurrentCulture);
+            CleanupOutcomeList.Visibility = Visibility.Collapsed;
+            CleanupOutcomesTitle.Visibility = Visibility.Collapsed;
+            UpdateResultsCleanupState();
+            return;
+        }
+
+        CleanupPageTitle.Text = result.WasCancelled ? Text("CleanupCancelledTitle") : Text("CleanupCompletedTitle");
+        CleanupPageDescription.Text = Text("CleanupCompletionDescription");
+        CleanupCompletionTitle.Text = result.WasCancelled ? Text("CleanupCancelledTitle") : Text("CleanupCompletedTitle");
+        CleanupCompletionSummary.Text = result.RecycledFileCount == 0
+            ? Text("CleanupNoChangesSummary")
+            : string.Format(CultureInfo.CurrentCulture, CleanupCompletedSummaryFormat, result.RecycledFileCount, ResultDisplayFormatter.FormatBytes(result.ActuallyReclaimedBytes));
+        CleanupCompletionMovedText.Text = result.RecycledFileCount.ToString(CultureInfo.CurrentCulture);
+        CleanupCompletionReclaimedText.Text = ResultDisplayFormatter.FormatBytes(result.ActuallyReclaimedBytes);
+        CleanupCompletionSkippedText.Text = result.SkippedFileCount.ToString(CultureInfo.CurrentCulture);
+        CleanupCompletionFailedText.Text = result.FailedFileCount.ToString(CultureInfo.CurrentCulture);
+
+        var details = result.Groups.SelectMany(group => group.Outcomes)
+            .Where(outcome => outcome.Status != CleanupCandidateOutcomeStatus.Recycled)
+            .Select(outcome =>
+            {
+                CleanupOutcomePresentation presentation = CleanupOutcomePresentationMapper.Map(outcome.Status);
+                return new CleanupOutcomeDisplay(
+                    outcome.Candidate.ExpectedFile.FileName,
+                    outcome.Candidate.ExpectedFile.NormalizedPath,
+                    outcome.Candidate.ExpectedFile.Length,
+                    Text(presentation.MessageKey));
+            })
+            .ToArray();
+        CleanupOutcomeList.ItemsSource = details;
+        CleanupOutcomeList.Visibility = details.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        CleanupOutcomesTitle.Visibility = details.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        UpdateResultsCleanupState();
+    }
+
+    private void UpdateResultsCleanupState()
+    {
+        ResultsStaleNotice.IsOpen = cleanupWorkflow.RequiresRescan;
+        ReviewCleanupButton.IsEnabled = ResultsViewModel is not null
+            && ResultsViewModel.SelectedCandidateCount > 0
+            && !cleanupWorkflow.RequiresRescan;
+    }
+
+    private void OnCleanupBackClick(object sender, RoutedEventArgs args)
+    {
+        if (cleanupWorkflow.IsActive)
+        {
+            return;
+        }
+
+        cleanupWorkflow.ReturnToResults();
+        CleanupPage.Visibility = Visibility.Collapsed;
+        ResultsPage.Visibility = Visibility.Visible;
+        ScanScrollViewer.Visibility = Visibility.Collapsed;
+        ShellNavigation.SelectedItem = ResultsNavigationItem;
+        UpdateResultsCleanupState();
+    }
+
+    private void OnCleanupRescanClick(object sender, RoutedEventArgs args) => OnNewScanClick(sender, args);
+
+    private void SetCleanupNavigationActive(bool isActive)
+    {
+        ScanNavigationItem.IsEnabled = !isActive;
+        ResultsNavigationItem.IsEnabled = !isActive && ResultsViewModel is not null;
+        SettingsNavigationItem.IsEnabled = !isActive;
+        ShellNavigation.IsPaneToggleButtonVisible = !isActive;
+    }
 
     private void UpdateResultsEmptyState()
     {
@@ -358,6 +588,7 @@ public sealed partial class MainWindow : Window, IDisposable
         isDisposed = true;
         activeScanGeneration++;
         elapsedTimer.Stop();
+        cleanupWorkflow.Dispose();
         scanWorkflow.Dispose();
     }
 
@@ -415,6 +646,8 @@ public sealed partial class MainWindow : Window, IDisposable
     }
 
     private sealed record SelectedScanRoot(string DisplayName, string NormalizedPath);
+
+    private sealed record CleanupOutcomeDisplay(string FileName, string Path, long Size, string Message);
 
     private delegate IntPtr NativeWindowProcedure(IntPtr windowHandle, uint message, IntPtr wParam, IntPtr lParam);
 

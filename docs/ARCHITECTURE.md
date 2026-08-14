@@ -26,3 +26,7 @@ Verified `CompletedScanResult` snapshots remain owned by **Core**. The App's `Re
 ## Cleanup safety state
 
 Cleanup planning and survivor/outcome semantics live in Core. Cleanup execution consumes an immutable plan, revalidates an explicit keeper before every candidate, and uses a session-scoped `SafetyOperationCoordinator` when scan and cleanup composition share lifecycle ownership. The App exposes a typed conversion from review handoff to Core cleanup intent but has no Phase 6 cleanup command or UI.
+
+## Cleanup presentation state
+
+`CleanupWorkflowViewModel` is App-owned, session-only presentation state. It snapshots the Phase 5 review handoff at the explicit confirmation boundary, asks Core to plan and execute, coalesces factual progress, and maps immutable Core outcomes to localized UI categories. It never revalidates files, chooses keepers, or makes recycle decisions. Any completed or cancelled cleanup attempt requires a fresh scan before the old verified result can be reviewed for cleanup again; the original snapshot is never edited to simulate post-cleanup truth.

@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using DuplicateFileCleanerPro.App.Cleanup;
+using DuplicateFileCleanerPro.App.Results;
 using DuplicateFileCleanerPro.Core.Cleanup;
 using DuplicateFileCleanerPro.Core.Detection;
 using DuplicateFileCleanerPro.Core.Discovery;
@@ -324,22 +326,32 @@ public sealed class CleanupSafetyIntegrationTests
 
     [TestMethod]
     [TestCategory("RecycleBinSmoke")]
-    public async Task RealIFileOperationMovesOnlySelectedDisposableCandidateToRecycleBin()
+    public async Task RealPresentationWorkflowMovesOnlySelectedDisposableCandidateToRecycleBin()
     {
         using var corpus = await CleanupCorpus.CreateAsync("real-recycle");
-        CleanupPlan plan = await corpus.CreatePlanAsync();
-        CleanupPlanMember candidate = plan.Groups[0].Candidates[0];
-        CleanupPlanMember keeper = plan.Groups[0].Keepers[0];
+        CompletedScanResult completed = await corpus.CreateCompletedResultAsync();
+        var review = new ResultsReviewViewModel(completed);
+        ResultMemberViewModel candidate = review.AllGroups.Single().Members.Single(member => member.File.FileName.StartsWith("candidate", StringComparison.Ordinal));
+        ResultMemberViewModel keeper = review.AllGroups.Single().Members.Single(member => member.File.FileName.StartsWith("keeper", StringComparison.Ordinal));
+        candidate.IsSelected = true;
+        var workflow = new CleanupWorkflowViewModel(new CleanupEngine(new WindowsCleanupPlatformService()));
 
-        CleanupResult result = await new CleanupEngine(new WindowsCleanupPlatformService()).ExecuteAsync(plan);
+        Assert.IsTrue(workflow.BeginReview(review));
+        Assert.AreEqual(1, workflow.SelectedCandidateCount);
+        Assert.AreEqual(candidate.File.Length, workflow.SelectedCandidateBytes);
 
+        CleanupResult? result = await workflow.ExecuteConfirmedAsync();
+
+        Assert.IsNotNull(result);
         Assert.AreEqual(CleanupCandidateOutcomeStatus.Recycled, result.Groups[0].Outcomes[0].Status);
         Assert.AreEqual(1, result.RecycledFileCount);
-        Assert.AreEqual(candidate.ExpectedFile.Length, result.ActuallyReclaimedBytes);
-        Assert.IsFalse(File.Exists(candidate.ExpectedFile.NormalizedPath));
-        Assert.IsTrue(File.Exists(keeper.ExpectedFile.NormalizedPath));
-        Assert.AreEqual(corpus.Content, await File.ReadAllTextAsync(keeper.ExpectedFile.NormalizedPath));
-        TestContext.WriteLine($"groups=1; members=2; recycled={result.RecycledFileCount}; reclaimedBytes={result.ActuallyReclaimedBytes}; keeperExists={File.Exists(keeper.ExpectedFile.NormalizedPath)}");
+        Assert.AreEqual(candidate.File.Length, result.ActuallyReclaimedBytes);
+        Assert.AreSame(result, workflow.Result);
+        Assert.IsTrue(workflow.RequiresRescan);
+        Assert.IsFalse(File.Exists(candidate.File.NormalizedPath));
+        Assert.IsTrue(File.Exists(keeper.File.NormalizedPath));
+        Assert.AreEqual(corpus.Content, await File.ReadAllTextAsync(keeper.File.NormalizedPath));
+        TestContext.WriteLine($"groups=1; members=2; recycled={result.RecycledFileCount}; reclaimedBytes={result.ActuallyReclaimedBytes}; keeperExists={File.Exists(keeper.File.NormalizedPath)}");
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -388,16 +400,21 @@ public sealed class CleanupSafetyIntegrationTests
 
         public async Task<CleanupPlan> CreatePlanAsync()
         {
+            CompletedScanResult completed = await CreateCompletedResultAsync();
+            DuplicateFileGroup group = completed.Detection.Groups[0];
+            DiscoveredFile candidate = group.Files.Single(file => file.FileName.StartsWith("candidate", StringComparison.Ordinal));
+            CleanupPlanningResult planning = CleanupPlanner.CreatePlan(new CleanupSelectionIntent(completed, [candidate.PhysicalIdentity]));
+            Assert.IsTrue(planning.Succeeded);
+            return planning.Plan!;
+        }
+
+        public async Task<CompletedScanResult> CreateCompletedResultAsync()
+        {
             RootNormalizationResult roots = new WindowsScanRootNormalizer().Normalize([Root]);
             DiscoveryResult discovery = await new WindowsFileDiscoveryService().DiscoverAsync(roots.Roots, new DiscoveryPolicy());
             ExactDuplicateDetectionResult detection = await ExactDuplicateDetector.DetectAsync(discovery.Files, new WindowsContentAnalysisService());
             Assert.HasCount(1, detection.Groups);
-            DuplicateFileGroup group = detection.Groups[0];
-            DiscoveredFile candidate = group.Files.Single(file => file.FileName.StartsWith("candidate", StringComparison.Ordinal));
-            var completed = new CompletedScanResult(discovery, detection);
-            CleanupPlanningResult planning = CleanupPlanner.CreatePlan(new CleanupSelectionIntent(completed, [candidate.PhysicalIdentity]));
-            Assert.IsTrue(planning.Succeeded);
-            return planning.Plan!;
+            return new CompletedScanResult(discovery, detection);
         }
 
         public void Dispose()

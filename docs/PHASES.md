@@ -7,7 +7,7 @@
 4. Scan workflow and scanning UI
 5. Results and review UX
 6. Cleanup safety engine — immutable planning, immediate keeper/candidate revalidation, Recycle Bin-only execution, and factual partial results
-7. Cleanup UX
+7. Cleanup UX — explicit review and confirmation, factual Recycle Bin progress/outcomes, cancellation, and mandatory post-cleanup rescan
 8. Settings, privacy and localization
 9. Accessibility
 10. Reliability and performance
