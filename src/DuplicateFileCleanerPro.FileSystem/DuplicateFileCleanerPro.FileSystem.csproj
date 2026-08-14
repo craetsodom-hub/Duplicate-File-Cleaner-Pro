@@ -1,4 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><AssemblyName>DuplicateFileCleanerPro.FileSystem</AssemblyName><RootNamespace>DuplicateFileCleanerPro.FileSystem</RootNamespace></PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\DuplicateFileCleanerPro.Core\DuplicateFileCleanerPro.Core.csproj" /></ItemGroup>
-</Project>

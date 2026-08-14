@@ -1,6 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <AssemblyName>DuplicateFileCleanerPro.Core</AssemblyName>
-    <RootNamespace>DuplicateFileCleanerPro.Core</RootNamespace>
-  </PropertyGroup>
-</Project>
