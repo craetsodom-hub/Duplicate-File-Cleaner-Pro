@@ -57,7 +57,7 @@ internal sealed class WindowsFileInspector
         PhysicalFileIdentity identity = new(identityInformation.VolumeSerialNumber, identityInformation.FileId.Low, identityInformation.FileId.High);
         if ((information.FileAttributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
         {
-            snapshot = new FileSnapshot(identity, ComposeLength(information.FileSizeHigh, information.FileSizeLow), DateTimeOffset.FromFileTime(basicInformation.LastWriteTime), DateTimeOffset.FromFileTime(basicInformation.ChangeTime), information.FileAttributes, false);
+            snapshot = new FileSnapshot(identity, ComposeLength(information.FileSizeHigh, information.FileSizeLow), DateTimeOffset.FromFileTime(basicInformation.LastWriteTime), DateTimeOffset.FromFileTime(basicInformation.ChangeTime), information.FileAttributes, information.NumberOfLinks, false);
             return true;
         }
 
@@ -69,6 +69,7 @@ internal sealed class WindowsFileInspector
                 DateTimeOffset.FromFileTime(basicInformation.LastWriteTime),
                 DateTimeOffset.FromFileTime(basicInformation.ChangeTime),
                 information.FileAttributes,
+                information.NumberOfLinks,
                 true);
             return true;
         }
@@ -79,6 +80,7 @@ internal sealed class WindowsFileInspector
             DateTimeOffset.FromFileTime(basicInformation.LastWriteTime),
             DateTimeOffset.FromFileTime(basicInformation.ChangeTime),
             information.FileAttributes,
+            information.NumberOfLinks,
             false);
         return true;
     }
@@ -141,7 +143,7 @@ internal sealed class WindowsFileInspector
 
     private static long ComposeLength(uint high, uint low) => checked((long)(((ulong)high << 32) | low));
 
-    internal sealed record FileSnapshot(PhysicalFileIdentity Identity, long Length, DateTimeOffset LastWriteTimeUtc, DateTimeOffset ChangeTimeUtc, FileAttributes Attributes, bool HasAdditionalNamedStream);
+    internal sealed record FileSnapshot(PhysicalFileIdentity Identity, long Length, DateTimeOffset LastWriteTimeUtc, DateTimeOffset ChangeTimeUtc, FileAttributes Attributes, uint NumberOfLinks, bool HasAdditionalNamedStream);
 
     private enum FileInfoByHandleClass
     {

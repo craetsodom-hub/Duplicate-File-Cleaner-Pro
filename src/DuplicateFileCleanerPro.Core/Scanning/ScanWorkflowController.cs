@@ -3,7 +3,7 @@ using DuplicateFileCleanerPro.Core.Discovery;
 namespace DuplicateFileCleanerPro.Core.Scanning;
 
 /// <summary>Owns one UI-facing scan workflow without depending on any UI framework.</summary>
-public sealed class ScanWorkflowController(ScanSessionService session) : IDisposable
+public sealed class ScanWorkflowController(ScanSessionService session, SafetyOperationCoordinator? operationCoordinator = null) : IDisposable
 {
     private readonly object sync = new();
     private CancellationTokenSource? activeCancellation;
@@ -33,6 +33,7 @@ public sealed class ScanWorkflowController(ScanSessionService session) : IDispos
     {
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(policy);
+        using IDisposable? operationLease = operationCoordinator?.Acquire(SafetyOperationKind.Scan);
         CancellationTokenSource ownedCancellation;
         long runGeneration;
         lock (sync)

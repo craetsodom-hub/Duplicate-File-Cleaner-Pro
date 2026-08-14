@@ -53,13 +53,42 @@ function Assert-ReferenceHashes {
     Write-Host '> visual reference SHA-256 integrity: verified'
 }
 
+function Assert-RecycleBinBoundary {
+    $boundary = 'src\DuplicateFileCleanerPro.Infrastructure.Windows\Cleanup\WindowsShellRecycleBin.cs'
+    $required = @(
+        'FileOperationRecycleOnDelete = 0x00080000',
+        'FileOperationAddUndoRecord = 0x20000000',
+        'operation.DeleteItem',
+        'operation.PerformOperations'
+    )
+
+    $text = Get-Content -LiteralPath $boundary -Raw
+    foreach ($fragment in $required) {
+        if (-not $text.Contains($fragment, [StringComparison]::Ordinal)) {
+            throw "Recycle Bin boundary is missing required structure: $fragment"
+        }
+    }
+
+    $unexpected = & rg --line-number --glob '*.cs' --glob '!WindowsShellRecycleBin.cs' 'DeleteItem\s*\(|PerformOperations\s*\(' 'src'
+    $result = $LASTEXITCODE
+    if ($result -eq 0) {
+        throw "Destructive Shell operation escaped the audited boundary:`n$($unexpected -join [Environment]::NewLine)"
+    }
+    if ($result -ne 1) {
+        throw "Recycle Bin boundary search failed with rg exit code $result."
+    }
+
+    Write-Host '> Recycle Bin-only boundary: verified'
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repositoryRoot
 try {
     Invoke-DotNet @('restore', 'DuplicateFileCleanerPro.sln', '--runtime', 'win-x64')
     Invoke-DotNet @('build', 'DuplicateFileCleanerPro.sln', '--configuration', 'Release', '-p:Platform=x64', '--no-restore')
     Invoke-DotNet @('test', 'DuplicateFileCleanerPro.sln', '--configuration', 'Release', '-p:Platform=x64', '--no-build')
-    Assert-NoRipgrepMatch -Description 'production destructive API' -Pattern '\b(File|Directory)\.(Delete|Move|Replace|Write(AllBytes|AllText)?|Append(AllText)?|Create(SymbolicLink|HardLink)?)\b|FileMode\.(Create|CreateNew|Append|Truncate)|SetAccessControl|SetOwner|SHFileOperation|Recycle' -Paths @('src')
+    Assert-NoRipgrepMatch -Description 'production forbidden mutation API' -Pattern '\b(File|Directory)\.(Delete|Move|Replace|Write(AllBytes|AllText)?|Append(AllText)?|Create(SymbolicLink|HardLink)?)\b|\bDeleteFile(W|A)?\b|FileMode\.(Create|CreateNew|Append|Truncate)|SetAccessControl\s*\(|SetOwner\s*\(|SHFileOperation|FOF_WANTNUKEWARNING' -Paths @('src')
+    Assert-RecycleBinBoundary
     Assert-NoRipgrepMatch -Description 'synchronous async blocking' -Pattern '\.Result\b|\.Wait\s*\(|GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(' -Paths @('src')
     Assert-NoRipgrepMatch -Description 'QA hook leakage' -Pattern 'TemporaryQa|Phase4\.QA|QA-root|automatic root selection' -Paths @('src')
     Assert-NoRipgrepMatch -Description 'network, telemetry, and upload API' -Pattern 'HttpClient|WebRequest|Socket|Telemetry|Analytics|Upload|ApplicationInsights|Sentry' -Paths @('src')

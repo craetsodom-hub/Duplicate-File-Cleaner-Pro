@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using DuplicateFileCleanerPro.Core.Detection;
 using DuplicateFileCleanerPro.Core.Discovery;
 using DuplicateFileCleanerPro.Core.Scanning;
+using DuplicateFileCleanerPro.Core.Cleanup;
 
 namespace DuplicateFileCleanerPro.App.Results;
 
@@ -258,6 +259,8 @@ public sealed class ReviewSelectionHandoff
 
     public CompletedScanResult VerifiedResult { get; }
     public IReadOnlyList<PhysicalFileIdentity> SelectedPhysicalMembers { get; }
+
+    public CleanupSelectionIntent CreateCleanupIntent() => new(VerifiedResult, SelectedPhysicalMembers);
 }
 
 public static class ResultDisplayFormatter

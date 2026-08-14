@@ -32,7 +32,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private static readonly CompositeFormat ResultCandidatesFormat = CompositeFormat.Parse(ResourceLoader.GetString("ResultCandidatesFormat"));
     private readonly WindowsScanRootNormalizer rootNormalizer = new();
     private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
-    private readonly ScanWorkflowController scanWorkflow = new(new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService()));
+    private readonly SafetyOperationCoordinator safetyOperations = new();
+    private readonly ScanWorkflowController scanWorkflow;
     private readonly Stopwatch scanStopwatch = new();
     private readonly DispatcherQueueTimer elapsedTimer;
     private string? setupNotice;
@@ -44,6 +45,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public MainWindow()
     {
+        scanWorkflow = new ScanWorkflowController(
+            new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService()),
+            safetyOperations);
         InitializeComponent();
         LocationsList.ItemsSource = selectedRoots;
         _windowProcedure = WindowProcedure;

@@ -15,4 +15,4 @@ The following invariants are permanent requirements for any future implementatio
 - The application must not request elevation or modify ACLs or ownership.
 - Safety always takes priority over performance or convenience.
 
-Later phases must be hardlink- and physical-file-identity-aware and must perform immediate pre-cleanup revalidation. This document deliberately does not prescribe an implementation that could weaken these guarantees.
+Phase 6 implements these rules through an immutable cleanup plan followed by independent execution-time proof. The executor holds a no-write/no-delete-share guard on a verified keeper across each candidate's Recycle Bin call. Candidate paths are rechecked immediately before the pathname-based Shell operation; the remaining final pathname-consumption race is documented in `CLEANUP_SAFETY.md` rather than concealed.
