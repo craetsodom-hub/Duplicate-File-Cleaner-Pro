@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="AppDisplayName" xml:space="preserve">
+    <value>Duplicate File Cleaner Pro</value>
+  </data>
+  <data name="MainWindow.Title" xml:space="preserve">
+    <value>Duplicate File Cleaner Pro</value>
+  </data>
+  <data name="FoundationMessage.Text" xml:space="preserve">
+    <value>Engineering foundation</value>
+  </data>
+</root>
