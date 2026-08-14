@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>DuplicateFileCleanerPro.App</AssemblyName>
+    <RootNamespace>DuplicateFileCleanerPro.App</RootNamespace>
+    <UseWinUI>true</UseWinUI>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DuplicateFileCleanerPro.Core\DuplicateFileCleanerPro.Core.csproj" />
+    <ProjectReference Include="..\DuplicateFileCleanerPro.Infrastructure\DuplicateFileCleanerPro.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+  </ItemGroup>
+</Project>

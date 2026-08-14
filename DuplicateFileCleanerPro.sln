@@ -8,6 +8,16 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Pha
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Phase0.PackageProbe", "src\DuplicateFileCleanerPro.Phase0.PackageProbe\DuplicateFileCleanerPro.Phase0.PackageProbe.csproj", "{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Core", "src\DuplicateFileCleanerPro.Core\DuplicateFileCleanerPro.Core.csproj", "{D98ED020-6F21-49F4-84E3-AB2C595D7B14}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Infrastructure", "src\DuplicateFileCleanerPro.Infrastructure\DuplicateFileCleanerPro.Infrastructure.csproj", "{E2B4F37E-0A68-4925-8B2C-D685CE54CD13}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.App", "src\DuplicateFileCleanerPro.App\DuplicateFileCleanerPro.App.csproj", "{9C5F934A-9966-4E0C-9D64-1988A37B80BE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.FileSystem", "src\DuplicateFileCleanerPro.FileSystem\DuplicateFileCleanerPro.FileSystem.csproj", "{8946AAEB-8D6B-45C9-89B1-282D296FCE62}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuplicateFileCleanerPro.Tests.Unit", "tests\DuplicateFileCleanerPro.Tests.Unit\DuplicateFileCleanerPro.Tests.Unit.csproj", "{ECE0C329-913D-4D0A-A199-ECE0606628EC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -26,5 +36,25 @@ Global
 		{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}.Debug|x64.Build.0 = Debug|x64
 		{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}.Release|x64.ActiveCfg = Release|x64
 		{1C48B452-DB2B-49E3-A270-0F9BCC2D30E3}.Release|x64.Build.0 = Release|x64
+		{D98ED020-6F21-49F4-84E3-AB2C595D7B14}.Debug|x64.ActiveCfg = Debug|x64
+		{D98ED020-6F21-49F4-84E3-AB2C595D7B14}.Debug|x64.Build.0 = Debug|x64
+		{D98ED020-6F21-49F4-84E3-AB2C595D7B14}.Release|x64.ActiveCfg = Release|x64
+		{D98ED020-6F21-49F4-84E3-AB2C595D7B14}.Release|x64.Build.0 = Release|x64
+		{E2B4F37E-0A68-4925-8B2C-D685CE54CD13}.Debug|x64.ActiveCfg = Debug|x64
+		{E2B4F37E-0A68-4925-8B2C-D685CE54CD13}.Debug|x64.Build.0 = Debug|x64
+		{E2B4F37E-0A68-4925-8B2C-D685CE54CD13}.Release|x64.ActiveCfg = Release|x64
+		{E2B4F37E-0A68-4925-8B2C-D685CE54CD13}.Release|x64.Build.0 = Release|x64
+		{9C5F934A-9966-4E0C-9D64-1988A37B80BE}.Debug|x64.ActiveCfg = Debug|x64
+		{9C5F934A-9966-4E0C-9D64-1988A37B80BE}.Debug|x64.Build.0 = Debug|x64
+		{9C5F934A-9966-4E0C-9D64-1988A37B80BE}.Release|x64.ActiveCfg = Release|x64
+		{9C5F934A-9966-4E0C-9D64-1988A37B80BE}.Release|x64.Build.0 = Release|x64
+		{8946AAEB-8D6B-45C9-89B1-282D296FCE62}.Debug|x64.ActiveCfg = Debug|x64
+		{8946AAEB-8D6B-45C9-89B1-282D296FCE62}.Debug|x64.Build.0 = Debug|x64
+		{8946AAEB-8D6B-45C9-89B1-282D296FCE62}.Release|x64.ActiveCfg = Release|x64
+		{8946AAEB-8D6B-45C9-89B1-282D296FCE62}.Release|x64.Build.0 = Release|x64
+		{ECE0C329-913D-4D0A-A199-ECE0606628EC}.Debug|x64.ActiveCfg = Debug|x64
+		{ECE0C329-913D-4D0A-A199-ECE0606628EC}.Debug|x64.Build.0 = Debug|x64
+		{ECE0C329-913D-4D0A-A199-ECE0606628EC}.Release|x64.ActiveCfg = Release|x64
+		{ECE0C329-913D-4D0A-A199-ECE0606628EC}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 EndGlobal
