@@ -15,6 +15,7 @@ TestResults/
 # Packaging output
 AppPackages/
 BundleArtifacts/
+artifacts/
 *.msix
 *.msixbundle
 *.appx
