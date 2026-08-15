@@ -5,3 +5,7 @@ Duplicate File Cleaner Pro processes selected files locally. It does not upload 
 The current product has no telemetry, analytics, account, cloud processing, scan history, cleanup history, or database. It persists only local product preferences: appearance, current scan sources and criteria, reusable folder/extension exclusions, and user-named custom profiles. Persisted setup can contain folder paths chosen by the user; it remains in packaged-app local settings on this device and is never transmitted. Results, selections, previews, file contents, and cleanup outcomes are not persisted. A Results report is written only when the user explicitly selects a destination in the native Save dialog; the app does not retain a report history or an export path.
 
 Cleanup is a local Windows Recycle Bin operation. This document describes current engineering behavior and is not a legal privacy-policy page.
+
+## Similar Photos
+
+Similar Photos analyzes eligible images locally. It creates bounded image decodes and visual fingerprints in memory for the active analysis only; it does not upload photos, build a persistent image index, retain thumbnails, save similarity groups, keep review marks, or store photo history. The only Similar Photos preference retained locally is the default sensitivity. Similar Photos review is non-destructive in the current product.

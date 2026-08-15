@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using DuplicateFileCleanerPro.Core.Similarity;
 
 namespace DuplicateFileCleanerPro.App.Settings;
 
@@ -14,6 +15,7 @@ public interface IAppSettingsStore
 public sealed partial class AppSettingsService(IAppSettingsStore store)
 {
     public const string AppearanceKey = "AppearancePreference";
+    public const string SimilarPhotosSensitivityKey = "SimilarPhotosSensitivityV1";
     private readonly IAppSettingsStore store = store ?? throw new ArgumentNullException(nameof(store));
 
     public AppearancePreference LoadAppearance()
@@ -29,6 +31,16 @@ public sealed partial class AppSettingsService(IAppSettingsStore store)
     {
         if (!Enum.IsDefined(appearance)) appearance = AppearancePreference.System;
         store.Write(AppearanceKey, appearance.ToString());
+    }
+
+    public SimilarPhotoSensitivity LoadSimilarPhotosSensitivity() =>
+        Enum.TryParse(store.Read(SimilarPhotosSensitivityKey), ignoreCase: false, out SimilarPhotoSensitivity sensitivity)
+        && Enum.IsDefined(sensitivity) ? sensitivity : SimilarPhotoSensitivity.Balanced;
+
+    public void SaveSimilarPhotosSensitivity(SimilarPhotoSensitivity sensitivity)
+    {
+        if (!Enum.IsDefined(sensitivity)) sensitivity = SimilarPhotoSensitivity.Balanced;
+        store.Write(SimilarPhotosSensitivityKey, sensitivity.ToString());
     }
 }
 

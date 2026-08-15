@@ -30,6 +30,9 @@ using Windows.UI.ViewManagement;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System.Reflection;
+using DuplicateFileCleanerPro.Core.Similarity;
+using DuplicateFileCleanerPro.Infrastructure.Windows.Similarity;
+using DuplicateFileCleanerPro.App.SimilarPhotos;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -68,6 +71,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly List<SavedScanProfile> savedProfiles = [];
     private readonly SafetyOperationCoordinator safetyOperations = new();
     private readonly ScanWorkflowController scanWorkflow;
+    private readonly SimilarPhotoSessionService similarPhotoSession;
     private readonly CleanupWorkflowViewModel cleanupWorkflow;
     private readonly SettingsViewModel settingsViewModel;
     private readonly AppSettingsService appSettings;
@@ -80,10 +84,13 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool isApplyingSetup;
     private string activeProfileId = PremiumScanProfiles.AllFilesId;
     private CancellationTokenSource? previewCancellation;
+    private CancellationTokenSource? similarPhotoCancellation;
+    private bool similarPhotosRunning;
     private bool detailsPaneOpen;
     private IntPtr _previousWindowProcedure;
 
     public ResultsReviewViewModel? ResultsViewModel { get; private set; }
+    public SimilarPhotosReviewViewModel? SimilarPhotosViewModel { get; private set; }
 
     public MainWindow(AppSettingsService settings)
     {
@@ -91,6 +98,7 @@ public sealed partial class MainWindow : Window, IDisposable
         scanWorkflow = new ScanWorkflowController(
             new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService()),
             safetyOperations);
+        similarPhotoSession = new SimilarPhotoSessionService(new WindowsFileDiscoveryService(), new WindowsSimilarPhotoDecoder());
         cleanupWorkflow = new CleanupWorkflowViewModel(
             new CleanupEngine(new WindowsCleanupPlatformService(), safetyOperations));
         settingsViewModel = new SettingsViewModel(settings, ApplyAppearance);
@@ -127,6 +135,7 @@ public sealed partial class MainWindow : Window, IDisposable
         elapsedTimer.Tick += (_, _) => ElapsedMetricText.Text = scanStopwatch.Elapsed.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
         Closed += OnClosed;
         LoadPersistedScanSetup();
+        LoadSimilarPhotosPreference();
         UpdateSetupState();
     }
 
@@ -168,6 +177,10 @@ public sealed partial class MainWindow : Window, IDisposable
         Grid.SetRow(ScanReviewSurface, isWide ? 0 : 1);
         Grid.SetColumn(ScanReviewSurface, isWide ? 1 : 0);
         ScanReviewSurface.Margin = new Thickness(0);
+
+        bool similarWide = args.NewSize.Width >= 980;
+        SimilarDetailColumn.Width = similarWide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        SimilarDetailPane.Visibility = similarWide ? Visibility.Visible : Visibility.Collapsed;
 
         UpdateResultsDetailsLayout();
     }
@@ -235,12 +248,14 @@ public sealed partial class MainWindow : Window, IDisposable
 
         bool resultsSelected = ReferenceEquals(args.SelectedItem, ResultsNavigationItem);
         bool settingsSelected = ReferenceEquals(args.SelectedItem, SettingsNavigationItem);
-        ScanScrollViewer.Visibility = resultsSelected ? Visibility.Collapsed : Visibility.Visible;
+        bool similarSelected = ReferenceEquals(args.SelectedItem, SimilarPhotosNavigationItem);
+        ScanScrollViewer.Visibility = resultsSelected || similarSelected ? Visibility.Collapsed : Visibility.Visible;
         ResultsPage.Visibility = resultsSelected ? Visibility.Visible : Visibility.Collapsed;
-        ScanPage.Visibility = settingsSelected ? Visibility.Collapsed : Visibility.Visible;
+        SimilarPhotosPage.Visibility = similarSelected ? Visibility.Visible : Visibility.Collapsed;
+        ScanPage.Visibility = settingsSelected || similarSelected ? Visibility.Collapsed : Visibility.Visible;
         ScanningPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = settingsSelected ? Visibility.Visible : Visibility.Collapsed;
-        if (!resultsSelected && !settingsSelected && scanWorkflow.IsRunning)
+        if (!resultsSelected && !settingsSelected && !similarSelected && scanWorkflow.IsRunning)
         {
             ScanPage.Visibility = Visibility.Collapsed;
             ScanningPage.Visibility = Visibility.Visible;
@@ -332,6 +347,7 @@ public sealed partial class MainWindow : Window, IDisposable
         SetSelectedSources(selectedRoots.Select(root => root.NormalizedPath).Append(path));
         PersistScanSetup();
         UpdateSetupState();
+        UpdateSimilarSetupState();
     }
 
     private void RefreshProfileChoices(string selectedId)
@@ -722,6 +738,7 @@ public sealed partial class MainWindow : Window, IDisposable
             selectedRoots.Remove(root);
             PersistScanSetup();
             UpdateSetupState();
+            UpdateSimilarSetupState();
         }
     }
 
@@ -1142,6 +1159,8 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         previewCancellation?.Cancel();
         previewCancellation?.Dispose();
+        similarPhotoCancellation?.Cancel();
+        similarPhotoCancellation?.Dispose();
         previewCancellation = null;
     }
 
@@ -1432,6 +1451,189 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
+    private void LoadSimilarPhotosPreference()
+    {
+        SimilarPhotoSensitivity sensitivity = appSettings.LoadSimilarPhotosSensitivity();
+        SimilarSensitivityComboBox.SelectedIndex = sensitivity switch
+        {
+            SimilarPhotoSensitivity.Strict => 0,
+            SimilarPhotoSensitivity.Broad => 2,
+            _ => 1,
+        };
+        UpdateSimilarSetupState();
+    }
+
+    private SimilarPhotoSensitivity SelectedSimilarSensitivity() => SimilarSensitivityComboBox.SelectedItem is ComboBoxItem { Tag: string tag }
+        && Enum.TryParse(tag, out SimilarPhotoSensitivity sensitivity) ? sensitivity : SimilarPhotoSensitivity.Balanced;
+
+    private void OnSimilarSensitivityChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (!isApplyingSetup) appSettings.SaveSimilarPhotosSensitivity(SelectedSimilarSensitivity());
+        UpdateSimilarSetupState();
+    }
+
+    private void OnUseExactLocationsClick(object sender, RoutedEventArgs args)
+    {
+        SimilarIncludeSubfoldersToggle.IsOn = IncludeSubfoldersToggle.IsOn;
+        UpdateSimilarSetupState();
+    }
+
+    private void UpdateSimilarSetupState()
+    {
+        if (SimilarLocationsSummary is null
+            || SimilarSetupSummary is null
+            || StartSimilarPhotosButton is null
+            || SimilarIncludeSubfoldersToggle is null
+            || SimilarSensitivityComboBox is null)
+        {
+            return;
+        }
+        int exclusions = excludedFolders.Count + excludedExtensions.Count;
+        SimilarLocationsSummary.Text = selectedRoots.Count == 0 ? "Choose at least one local photo location." : $"{selectedRoots.Count} location{(selectedRoots.Count == 1 ? string.Empty : "s")} selected";
+        SimilarSetupSummary.Text = $"{selectedRoots.Count} locations · {SelectedSimilarSensitivity()} similarity · {(SimilarIncludeSubfoldersToggle.IsOn ? "Include subfolders" : "Top folder only")} · {exclusions} exclusions";
+        StartSimilarPhotosButton.IsEnabled = selectedRoots.Count > 0 && !similarPhotosRunning && !cleanupWorkflow.IsActive;
+    }
+
+    private async void OnStartSimilarPhotosClick(object sender, RoutedEventArgs args)
+    {
+        if (selectedRoots.Count == 0 || similarPhotosRunning || cleanupWorkflow.IsActive) return;
+        similarPhotosRunning = true;
+        SimilarPhotosViewModel = null;
+        SimilarSetupPanel.Visibility = Visibility.Collapsed;
+        SimilarResultsPanel.Visibility = Visibility.Collapsed;
+        SimilarScanningPanel.Visibility = Visibility.Visible;
+        SimilarStageText.Text = "Finding photos";
+        SimilarActivityText.Text = string.Empty;
+        SimilarMetricsText.Text = "0 photos found";
+        similarPhotoCancellation?.Dispose();
+        similarPhotoCancellation = new CancellationTokenSource();
+        SimilarPhotoSensitivity sensitivity = SelectedSimilarSensitivity();
+        DiscoveryPolicy policy = new(
+            IncludeSubfolders: SimilarIncludeSubfoldersToggle.IsOn,
+            Criteria: new ScanCriteria(ScanFileType.Images),
+            ExcludedFolders: excludedFolders.ToArray(),
+            ExcludedExtensions: excludedExtensions.ToArray());
+        var progress = new CoalescingUiProgress<SimilarPhotoSessionProgress>(DispatcherQueue, UpdateSimilarProgress);
+        SimilarPhotoSessionResult result = await similarPhotoSession.RunAsync(selectedRoots.Select(root => new ScanRoot(root.NormalizedPath)), policy, sensitivity, progress, similarPhotoCancellation.Token);
+        similarPhotosRunning = false;
+        SimilarScanningPanel.Visibility = Visibility.Collapsed;
+        if (result.State == ScanSessionState.Completed && result.CompletedResult is not null)
+        {
+            ShowSimilarResults(result.CompletedResult);
+        }
+        else
+        {
+            SimilarSetupPanel.Visibility = Visibility.Visible;
+            SimilarSetupSummary.Text = result.State == ScanSessionState.Cancelled ? "Analysis cancelled. Your locations and preferences are unchanged." : "Analysis could not complete. Your locations and preferences are unchanged.";
+        }
+        UpdateSimilarSetupState();
+    }
+
+    private void UpdateSimilarProgress(SimilarPhotoSessionProgress progress)
+    {
+        SimilarStageText.Text = progress.Stage switch
+        {
+            SimilarPhotoProgressStage.FindingPhotos => "Finding photos",
+            SimilarPhotoProgressStage.AnalyzingPhotos => "Analyzing photos",
+            SimilarPhotoProgressStage.ComparingSimilarities => "Comparing similarities",
+            _ => "Building groups",
+        };
+        SimilarActivityText.Text = progress.CurrentPath;
+        SimilarProgressBar.IsIndeterminate = progress.TotalItems is null or 0;
+        if (progress.TotalItems is int total && total > 0) SimilarProgressBar.Value = 100d * progress.CompletedItems / total;
+        SimilarMetricsText.Text = $"{progress.CompletedItems:N0} photos · {progress.CandidatePairs:N0} candidate comparisons · {progress.GroupCount:N0} similarity groups";
+    }
+
+    private void OnCancelSimilarPhotosClick(object sender, RoutedEventArgs args) => similarPhotoCancellation?.Cancel();
+    private void OnSimilarScanAgainClick(object sender, RoutedEventArgs args) { SimilarResultsPanel.Visibility = Visibility.Collapsed; SimilarSetupPanel.Visibility = Visibility.Visible; UpdateSimilarSetupState(); }
+
+    private void ShowSimilarResults(CompletedSimilarPhotoScanResult result)
+    {
+        SimilarPhotosViewModel = new SimilarPhotosReviewViewModel(result);
+        SimilarPhotosPage.DataContext = SimilarPhotosViewModel;
+        SimilarGroupsList.ItemsSource = SimilarPhotosViewModel.VisibleGroups;
+        SimilarGroupCountText.Text = SimilarPhotosViewModel.GroupCount.ToString(CultureInfo.CurrentCulture);
+        SimilarPhotoCountText.Text = SimilarPhotosViewModel.PhotoCount.ToString(CultureInfo.CurrentCulture);
+        SimilarVeryCountText.Text = SimilarPhotosViewModel.VerySimilarCount.ToString(CultureInfo.CurrentCulture);
+        SimilarAnalyzedCountText.Text = SimilarPhotosViewModel.AnalyzedPhotoCount.ToString(CultureInfo.CurrentCulture);
+        SimilarEmptyPanel.Visibility = SimilarPhotosViewModel.HasResults ? Visibility.Collapsed : Visibility.Visible;
+        SimilarGroupsList.Visibility = SimilarPhotosViewModel.HasResults ? Visibility.Visible : Visibility.Collapsed;
+        SimilarEmptyTitle.Text = "No similar photo groups found";
+        SimilarEmptyDescription.Text = "No visual matches met the selected sensitivity. Try another analysis sensitivity if useful.";
+        SimilarResultsPanel.Visibility = Visibility.Visible;
+        SimilarSetupPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnSimilarGroupSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (SimilarPhotosViewModel is null || SimilarGroupsList.SelectedItem is not SimilarPhotoGroupViewModel group) return;
+        SimilarPhotosViewModel.SelectGroup(group);
+        SimilarPhotosList.ItemsSource = group.Photos;
+        SimilarDetailHint.Text = $"{group.Photos.Count} visually related photos · {group.TierLabel}. Choose two photos to compare.";
+        SimilarComparisonText.Text = "Choose a left and right photo to compare.";
+        SimilarLeftPreview.Source = null;
+    }
+
+    private void OnSimilarSearchChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { if (SimilarPhotosViewModel is not null) { SimilarPhotosViewModel.SearchText = sender.Text; UpdateSimilarEmptyState(); } }
+    private void OnSimilarTierFilterChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (SimilarPhotosViewModel is null || SimilarTierFilterComboBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
+        SimilarPhotosViewModel.TierFilter = tag == "All" ? null : Enum.Parse<SimilarityTier>(tag, false); UpdateSimilarEmptyState();
+    }
+    private void OnSimilarSortChanged(object sender, SelectionChangedEventArgs args) { if (SimilarPhotosViewModel is not null && SimilarSortComboBox.SelectedItem is ComboBoxItem { Tag: string tag }) SimilarPhotosViewModel.SortOption = Enum.Parse<SimilarPhotoSortOption>(tag, false); }
+    private void UpdateSimilarEmptyState()
+    {
+        if (SimilarPhotosViewModel is null) return;
+        bool visible = SimilarPhotosViewModel.HasVisibleGroups;
+        SimilarGroupsList.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        SimilarEmptyPanel.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        if (!visible) { SimilarEmptyTitle.Text = "No groups match the current filters"; SimilarEmptyDescription.Text = "Clear or adjust the similarity filters to continue reviewing."; }
+    }
+    private void OnClearSimilarMarksClick(object sender, RoutedEventArgs args) => SimilarPhotosViewModel?.ClearMarks();
+    private void OnSimilarReviewClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is not FrameworkElement { Tag: SimilarPhotoItemViewModel photo }) return;
+        SimilarPhotoReviewMark next = photo.Mark switch { SimilarPhotoReviewMark.None => SimilarPhotoReviewMark.Keep, SimilarPhotoReviewMark.Keep => SimilarPhotoReviewMark.ConsiderRemoving, _ => SimilarPhotoReviewMark.None };
+        photo.SetMark(next);
+    }
+    private SimilarPhotoItemViewModel? SelectedSimilarPhoto()
+    {
+        if (SimilarPhotosList.SelectedItem is SimilarPhotoItemViewModel selected) return selected;
+        IReadOnlyList<SimilarPhotoItemViewModel>? photos = SimilarPhotosList.ItemsSource as IReadOnlyList<SimilarPhotoItemViewModel>;
+        return photos is { Count: > 0 } ? photos[0] : null;
+    }
+    private void OnChooseSimilarLeftClick(object sender, RoutedEventArgs args) { if (SimilarPhotosViewModel is not null && SelectedSimilarPhoto() is { } photo) { SimilarPhotosViewModel.ChooseLeft(photo); UpdateSimilarComparison(); } }
+    private void OnChooseSimilarRightClick(object sender, RoutedEventArgs args)
+    {
+        if (SimilarPhotosViewModel is null) return;
+        SimilarPhotoItemViewModel? photo = SelectedSimilarPhoto();
+        if (photo == SimilarPhotosViewModel.LeftPhoto && SimilarPhotosViewModel.ActiveGroup is { } group)
+        {
+            for (int index = 0; index < group.Photos.Count; index++)
+            {
+                if (group.Photos[index] != photo) { photo = group.Photos[index]; break; }
+            }
+        }
+        if (photo is not null) { SimilarPhotosViewModel.ChooseRight(photo); UpdateSimilarComparison(); }
+    }
+    private void OnSwapSimilarClick(object sender, RoutedEventArgs args) { SimilarPhotosViewModel?.Swap(); UpdateSimilarComparison(); }
+    private void UpdateSimilarComparison()
+    {
+        if (SimilarPhotosViewModel is not { CanCompare: true, LeftPhoto: { } left, RightPhoto: { } right }) return;
+        SimilarLeftPreview.Source = new BitmapImage(new Uri(left.File.NormalizedPath));
+        SimilarComparisonText.Text = $"Left: {left.File.FileName}\nRight: {right.File.FileName}";
+        SimilarComparisonMetadata.Text = $"{left.File.Length:N0} bytes · {left.File.LastWriteTimeUtc.LocalDateTime:g}\n{right.File.Length:N0} bytes · {right.File.LastWriteTimeUtc.LocalDateTime:g}\n{left.File.NormalizedPath}\n{right.File.NormalizedPath}";
+    }
+    private async void OnOpenSimilarLeftClick(object sender, RoutedEventArgs args) { if (SimilarPhotosViewModel?.LeftPhoto is { } photo && File.Exists(photo.File.NormalizedPath)) await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(photo.File.NormalizedPath)); }
+    private async void OnRevealSimilarLeftClick(object sender, RoutedEventArgs args) { if (SimilarPhotosViewModel?.LeftPhoto is { } photo && File.Exists(photo.File.NormalizedPath)) await Windows.System.Launcher.LaunchFolderPathAsync(Path.GetDirectoryName(photo.File.NormalizedPath)); }
+    private void OnCopySimilarPathClick(object sender, RoutedEventArgs args)
+    {
+        if (SimilarPhotosViewModel?.LeftPhoto is not { } photo) return;
+        DataPackage package = new() { RequestedOperation = DataPackageOperation.Copy };
+        package.SetText(photo.File.NormalizedPath);
+        Clipboard.SetContent(package);
+    }
+
     private static string Text(string key) => ResourceLoader.GetString(key);
 
     public void Dispose()
@@ -1448,6 +1650,7 @@ public sealed partial class MainWindow : Window, IDisposable
         elapsedTimer.Stop();
         cleanupWorkflow.Dispose();
         scanWorkflow.Dispose();
+        similarPhotoSession.Dispose();
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
