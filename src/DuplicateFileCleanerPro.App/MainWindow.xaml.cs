@@ -7,6 +7,8 @@ using DuplicateFileCleanerPro.Infrastructure.Windows.Detection;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Discovery;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Windows.Storage.Pickers;
 using Windows.UI;
 using System.Diagnostics;
@@ -20,7 +22,9 @@ using DuplicateFileCleanerPro.App.Cleanup;
 using DuplicateFileCleanerPro.Core.Cleanup;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Cleanup;
 using DuplicateFileCleanerPro.App.Settings;
+using DuplicateFileCleanerPro.App.Accessibility;
 using Windows.ApplicationModel;
+using Windows.UI.ViewManagement;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -50,6 +54,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly DispatcherQueueTimer elapsedTimer;
     private string? setupNotice;
     private long activeScanGeneration;
+    private readonly OperationAnnouncementGate<string> scanAnnouncementGate = new();
     private bool isDisposed;
     private IntPtr _previousWindowProcedure;
 
@@ -64,6 +69,8 @@ public sealed partial class MainWindow : Window, IDisposable
             new CleanupEngine(new WindowsCleanupPlatformService(), safetyOperations));
         settingsViewModel = new SettingsViewModel(settings, ApplyAppearance);
         InitializeComponent();
+        AutomationProperties.SetLiveSetting(CleanupActivityText, AutomationLiveSetting.Polite);
+        AutomationProperties.SetLiveSetting(CleanupCompletionTitle, AutomationLiveSetting.Polite);
         LocationsList.ItemsSource = selectedRoots;
         _windowProcedure = WindowProcedure;
         ConfigureMinimumWindowSize();
@@ -138,6 +145,18 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         Microsoft.UI.Windowing.AppWindowTitleBar titleBar = AppWindow.TitleBar;
+        if (new AccessibilitySettings().HighContrast)
+        {
+            // Let Windows supply the system high-contrast caption colors rather than overriding them.
+            titleBar.ButtonForegroundColor = null;
+            titleBar.ButtonInactiveForegroundColor = null;
+            titleBar.ButtonBackgroundColor = null;
+            titleBar.ButtonInactiveBackgroundColor = null;
+            titleBar.ButtonHoverBackgroundColor = null;
+            titleBar.ButtonPressedBackgroundColor = null;
+            return;
+        }
+
         bool isDark = ShellNavigation.ActualTheme == ElementTheme.Dark;
         titleBar.ButtonForegroundColor = isDark ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 0, 0, 0);
         titleBar.ButtonInactiveForegroundColor = isDark ? Color.FromArgb(255, 150, 150, 150) : Color.FromArgb(255, 96, 96, 96);
@@ -219,6 +238,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ScanPage.Visibility = Visibility.Collapsed;
         ScanningPage.Visibility = Visibility.Visible;
         ShellNavigation.IsPaneToggleButtonVisible = false;
+        scanAnnouncementGate.Reset();
         scanStopwatch.Restart();
         elapsedTimer.Start();
         var progress = new CoalescingUiProgress<ScanSessionProgress>(DispatcherQueue, update =>
@@ -279,7 +299,12 @@ public sealed partial class MainWindow : Window, IDisposable
         bool determinateAnalysis = progress.State == ScanSessionState.Analyzing && !progress.IsVerifying;
         ScanProgressBar.IsIndeterminate = !determinateAnalysis;
         ScanProgressBar.Value = progress.TotalCandidateBytes == 0 ? 0 : 100d * progress.BytesProcessed / progress.TotalCandidateBytes;
-        ScanStageTitle.Text = progress.State == ScanSessionState.Discovering ? Text("ScanDiscovering") : Text("ScanAnalyzing");
+        string stage = progress.State == ScanSessionState.Discovering ? Text("ScanDiscovering") : Text("ScanAnalyzing");
+        // Announce only meaningful stage changes; high-frequency file progress remains visual.
+        if (scanAnnouncementGate.ShouldAnnounce(stage))
+        {
+            ScanStageTitle.Text = stage;
+        }
         CurrentActivityText.Text = string.IsNullOrWhiteSpace(progress.CurrentPath) ? Text("ScanActivityFallback") : progress.CurrentPath;
         FilesMetricText.Text = progress.FilesDiscovered.ToString(CultureInfo.CurrentCulture);
         AnalyzedMetricText.Text = progress.FilesAnalyzed.ToString(CultureInfo.CurrentCulture);
@@ -292,10 +317,12 @@ public sealed partial class MainWindow : Window, IDisposable
         if (ResultsViewModel is not null)
         {
             ResultsViewModel.PropertyChanged -= OnResultsViewModelPropertyChanged;
+            ResultsViewModel.SelectionRejected -= OnResultsSelectionRejected;
         }
 
         ResultsViewModel = new ResultsReviewViewModel(result);
         ResultsViewModel.PropertyChanged += OnResultsViewModelPropertyChanged;
+        ResultsViewModel.SelectionRejected += OnResultsSelectionRejected;
         ResultsPage.DataContext = ResultsViewModel;
         ResultsNavigationItem.IsEnabled = true;
         ResultGroupsText.Text = ResultsViewModel.DuplicateGroupCount.ToString(CultureInfo.CurrentCulture);
@@ -307,6 +334,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ResultsEmptyDescription.Text = ResultsViewModel.HasResults ? Text("ResultsNoMatchesDescription") : Text("ResultsNoDuplicatesDescription");
         UpdateResultsEmptyState();
         ResultsStaleNotice.IsOpen = false;
+        ResultsSelectionNotice.IsOpen = false;
         CleanupPage.Visibility = Visibility.Collapsed;
         ScanScrollViewer.Visibility = Visibility.Collapsed;
         ResultsPage.Visibility = Visibility.Visible;
@@ -318,6 +346,7 @@ public sealed partial class MainWindow : Window, IDisposable
         if (ResultsViewModel is not null)
         {
             ResultsViewModel.PropertyChanged -= OnResultsViewModelPropertyChanged;
+            ResultsViewModel.SelectionRejected -= OnResultsSelectionRejected;
         }
 
         ResultsViewModel = null;
@@ -325,6 +354,7 @@ public sealed partial class MainWindow : Window, IDisposable
         ResultsNavigationItem.IsEnabled = false;
         cleanupWorkflow.ResetForNewScan();
         ResultsStaleNotice.IsOpen = false;
+        ResultsSelectionNotice.IsOpen = false;
     }
 
     private void OnResultsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
@@ -338,6 +368,12 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             UpdateResultsEmptyState();
         }
+    }
+
+    private void OnResultsSelectionRejected(object? sender, EventArgs args)
+    {
+        // This is deliberately an explicit, localized live status rather than a silent checkbox reset.
+        ResultsSelectionNotice.IsOpen = true;
     }
 
     private void UpdateCandidateSummary()

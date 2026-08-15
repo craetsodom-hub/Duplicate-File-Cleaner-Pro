@@ -32,6 +32,8 @@ public sealed class ResultsReviewViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    /// <summary>Raised when presentation prevents selecting every independent member of a group.</summary>
+    public event EventHandler? SelectionRejected;
 
     public CompletedScanResult CompletedResult { get; }
     public ObservableCollection<ResultGroupViewModel> VisibleGroups { get; }
@@ -114,6 +116,7 @@ public sealed class ResultsReviewViewModel : INotifyPropertyChanged
         if (selected && !member.IsSelected && group.SelectedCandidateCount >= group.Members.Count - 1)
         {
             member.NotifySelectionRejected();
+            SelectionRejected?.Invoke(this, EventArgs.Empty);
             return false;
         }
 
@@ -229,6 +232,10 @@ public sealed class ResultMemberViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     internal ResultGroupViewModel Group { get; }
     public DiscoveredFile File { get; }
+    /// <summary>Native checkbox semantics announce the checked state; the filename distinguishes the member.</summary>
+    public string AccessibleName => File.FileName;
+    /// <summary>The exact untrimmed path remains available without putting it in every visible row.</summary>
+    public string AccessiblePath => File.NormalizedPath;
 
     public bool IsSelected
     {

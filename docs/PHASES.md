@@ -9,7 +9,7 @@
 6. Cleanup safety engine — immutable planning, immediate keeper/candidate revalidation, Recycle Bin-only execution, and factual partial results
 7. Cleanup UX — explicit review and confirmation, factual Recycle Bin progress/outcomes, cancellation, and mandatory post-cleanup rescan
 8. Settings, privacy and localization — persisted appearance preference, factual privacy/safety information, and completed English resource coverage
-9. Accessibility
+9. Accessibility — native keyboard/focus semantics, localized automation labels, explicit survivor-protection feedback, and disciplined operation-status announcements
 10. Reliability and performance
 11. Automated end-to-end QA
 12. Professional visual polish

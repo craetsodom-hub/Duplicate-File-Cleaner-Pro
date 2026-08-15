@@ -34,3 +34,7 @@ Cleanup planning and survivor/outcome semantics live in Core. Cleanup execution 
 ## Settings and appearance
 
 The App owns the single persisted v1 preference: `AppearancePreference`. `WindowsAppSettingsStore` maps only that typed key to packaged local settings; scan roots, file paths, results, selections, and cleanup outcomes remain in memory only. `SettingsViewModel` applies System, Light, or Dark through the shell's requested theme; page-local theme code is not used.
+
+## Accessibility baseline
+
+The App uses native WinUI keyboard, focus, control, dialog, progress, and expand/collapse semantics. Semantic headings and localized automation properties are defined beside their controls; result-selection rejection is surfaced through a localized polite live status rather than a silent reset. High-frequency progress is coalesced for rendering, while accessibility announcement is limited to meaningful scan-stage, completion, failure, and cancellation changes. In Windows high contrast, custom caption colors are relinquished so system colors remain authoritative.

@@ -70,7 +70,6 @@
   <data name="GroupReclaimableLabel.Text" xml:space="preserve"><value>Reclaimable</value></data>
   <data name="ResultsGroupsList.AutomationProperties.Name" xml:space="preserve"><value>Verified duplicate groups</value></data>
   <data name="ResultsMembersList.AutomationProperties.Name" xml:space="preserve"><value>Verified physical file members</value></data>
-  <data name="ResultsCandidateCheckBox.AutomationProperties.Name" xml:space="preserve"><value>Select candidate for later cleanup</value></data>
   <data name="ResultsNoDuplicatesTitle" xml:space="preserve"><value>No duplicates found</value></data>
   <data name="ResultsNoDuplicatesDescription" xml:space="preserve"><value>This completed scan did not find verified exact duplicate groups.</value></data>
   <data name="ResultsNoMatchesTitle" xml:space="preserve"><value>No matching groups</value></data>
@@ -148,4 +147,8 @@
   <data name="SettingsAboutTitle.Text" xml:space="preserve"><value>About</value></data>
   <data name="SettingsAboutDescription.Text" xml:space="preserve"><value>Duplicate File Cleaner Pro</value></data>
   <data name="AppVersionText.AutomationProperties.Name" xml:space="preserve"><value>Application version</value></data>
+  <data name="ScanProgressBar.AutomationProperties.Name" xml:space="preserve"><value>Scan progress</value></data>
+  <data name="ResultsDescendingButton.AutomationProperties.Name" xml:space="preserve"><value>Change results sort direction</value></data>
+  <data name="ResultsSelectionNotice.Title" xml:space="preserve"><value>Keep one verified copy</value></data>
+  <data name="ResultsSelectionNotice.Message" xml:space="preserve"><value>At least one independent verified copy must remain unselected in every duplicate group.</value></data>
 </root>

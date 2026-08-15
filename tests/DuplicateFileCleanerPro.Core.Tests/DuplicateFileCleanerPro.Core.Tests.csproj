@@ -11,5 +11,6 @@
     <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Cleanup\CleanupWorkflowViewModel.cs" Link="Cleanup\CleanupWorkflowViewModel.cs" />
     <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Settings\AppSettings.cs" Link="Settings\AppSettings.cs" />
     <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Settings\AppVersionFormatter.cs" Link="Settings\AppVersionFormatter.cs" />
+    <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Accessibility\OperationAnnouncementGate.cs" Link="Accessibility\OperationAnnouncementGate.cs" />
   </ItemGroup>
 </Project>

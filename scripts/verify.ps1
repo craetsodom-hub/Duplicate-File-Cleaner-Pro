@@ -81,6 +81,31 @@ function Assert-RecycleBinBoundary {
     Write-Host '> Recycle Bin-only boundary: verified'
 }
 
+function Assert-AccessibilityMarkers {
+    $xaml = Get-Content -LiteralPath 'src\DuplicateFileCleanerPro.App\MainWindow.xaml' -Raw
+    $codeBehind = Get-Content -LiteralPath 'src\DuplicateFileCleanerPro.App\MainWindow.xaml.cs' -Raw
+    $resources = Get-Content -LiteralPath 'src\DuplicateFileCleanerPro.App\Strings\en-US\Resources.resw' -Raw
+    foreach ($marker in @('ResultsSelectionNotice', 'AutomationProperties.LiveSetting="Polite"', 'AutomationProperties.HeadingLevel="Level1"')) {
+        if (-not $xaml.Contains($marker, [StringComparison]::Ordinal)) {
+            throw "Accessibility marker is missing from the shell: $marker"
+        }
+    }
+    if (-not $codeBehind.Contains('AccessibilitySettings().HighContrast', [StringComparison]::Ordinal)) {
+        throw 'High-contrast caption-color fallback is missing.'
+    }
+    if (-not $codeBehind.Contains('AutomationProperties.SetLiveSetting(CleanupActivityText', [StringComparison]::Ordinal)) {
+        throw 'Cleanup progress live-status marker is missing.'
+    }
+    foreach ($key in @('ResultsSelectionNotice.Message', 'ResultsDescendingButton.AutomationProperties.Name', 'ScanProgressBar.AutomationProperties.Name')) {
+        $expectedName = 'name="' + $key + '"'
+        if (-not $resources.Contains($expectedName, [StringComparison]::Ordinal)) {
+            throw "Localized accessibility resource is missing: $key"
+        }
+    }
+
+    Write-Host '> accessibility shell markers: verified'
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repositoryRoot
 try {
@@ -92,6 +117,7 @@ try {
     Assert-NoRipgrepMatch -Description 'synchronous async blocking' -Pattern '\.Result\b|\.Wait\s*\(|GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(' -Paths @('src')
     Assert-NoRipgrepMatch -Description 'QA hook leakage' -Pattern 'TemporaryQa|Phase4\.QA|Phase7\.QA|QA-root|automatic root selection' -Paths @('src')
     Assert-NoRipgrepMatch -Description 'network, telemetry, and upload API' -Pattern 'HttpClient|WebRequest|Socket|Telemetry|Analytics|Upload|ApplicationInsights|Sentry|Microsoft\.Data\.Sqlite|EntityFramework|LiteDB' -Paths @('src')
+    Assert-AccessibilityMarkers
     Assert-ReferenceHashes
     & git diff --check
     if ($LASTEXITCODE -ne 0) {
