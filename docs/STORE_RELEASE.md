@@ -26,6 +26,11 @@ ARM64 is compile/package validated on this x64 machine, but needs a native ARM64
 device for runtime certification. x86 is additionally suitable for local x64
 smoke testing.
 
+Each architecture package is self-contained for the .NET 10 runtime. The
+Microsoft Windows App Runtime remains a declared framework dependency supplied
+by Windows/Store deployment; customers do not need a developer-installed .NET
+runtime.
+
 The repository contains a 1x1 transparent `StoreLogo.png` placeholder. It is
 intentionally not replaced in Phase 13: a real approved application icon must be
 provided before Store submission. This is an artwork handoff, not a reason to

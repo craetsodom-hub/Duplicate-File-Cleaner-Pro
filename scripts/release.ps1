@@ -51,6 +51,11 @@ function Assert-PackageLayout {
     if ($manifest.Package.Identity.Name -ne 'DuplicateFileCleanerPro') {
         throw "Package '$PackagePath' has an unexpected identity or version."
     }
+    foreach ($runtimeFile in 'coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll') {
+        if (-not (Test-Path -LiteralPath (Join-Path $destination $runtimeFile))) {
+            throw "Package '$PackagePath' is missing the self-contained .NET runtime file '$runtimeFile'."
+        }
+    }
     $forbidden = Get-ChildItem -LiteralPath $destination -Recurse -File |
         Where-Object { $_.FullName -match '\\(\.qa|docs\\design-references|tests|TestResults)\\|\.pfx$|\.cer$|TemporaryQa|Phase\d+\.QA' }
     if ($forbidden) {
@@ -94,11 +99,15 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $layout 'AppxManifest.xml'))) {
             throw "The $($architecture.Name) package layout was not produced at $layout."
         }
+        $published = Join-Path $artifactRoot (Join-Path 'published' $architecture.Name)
+        New-Item -ItemType Directory -Path $published -Force | Out-Null
+        Invoke-External 'dotnet' @('publish', $project, '--configuration', 'Release', "-p:Platform=$($architecture.Platform)", '--runtime', $architecture.Runtime, '--self-contained', 'true', '--no-restore', '--output', $published)
         $staging = Join-Path $artifactRoot (Join-Path 'staging' $architecture.Name)
         New-Item -ItemType Directory -Path $staging -Force | Out-Null
         Get-ChildItem -LiteralPath $layout -Force | Copy-Item -Destination $staging -Recurse -Force
         $nestedAppX = Join-Path $staging 'AppX'
         if (Test-Path -LiteralPath $nestedAppX) { Remove-Item -LiteralPath $nestedAppX -Recurse -Force }
+        Get-ChildItem -LiteralPath $published -Force | Copy-Item -Destination $staging -Recurse -Force
         Get-ChildItem -LiteralPath $staging -Recurse -File -Filter '*.pdb' | Remove-Item -Force
         Get-ChildItem -LiteralPath $staging -Recurse -File -Filter '*.appxrecipe' | Remove-Item -Force
         $package = Join-Path $packageDirectory "DuplicateFileCleanerPro_$version`_$($architecture.Name).msix"
