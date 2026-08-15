@@ -9,6 +9,7 @@ The engineering gate is `scripts/verify.ps1` and has five layers:
 5. Screenshot QA remains useful at visual milestones but is not an engine-correctness oracle.
 6. Cleanup safety tests exercise malformed intent, physical-identity overlap, candidate/keeper replacement and mutation, cancellation/partial success, Recycle Bin failure, throwing observers, and a fixed-seed 1,000-case survivor-invariant matrix.
 7. Cleanup presentation tests verify review snapshots, candidate versus reclaimed accounting, progress, partial results, cancellation, outcome mapping, stale-session behavior, and close-request cancellation without HWND automation.
+8. Settings tests verify System/Light/Dark defaults, persistence, invalid-value fallback, no duplicate theme application, and that the settings store writes only the appearance key.
 
 The deterministic safety corpus contains thousands of files and hundreds of MiB, including exact groups, same-size negatives, empty and Unicode duplicates, large files, hard links, nesting, and skipped policy objects. It verifies exact groups, independent members, reclaimable bytes, and reports real timings/memory/handle observations.
 

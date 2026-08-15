@@ -30,3 +30,7 @@ Cleanup planning and survivor/outcome semantics live in Core. Cleanup execution 
 ## Cleanup presentation state
 
 `CleanupWorkflowViewModel` is App-owned, session-only presentation state. It snapshots the Phase 5 review handoff at the explicit confirmation boundary, asks Core to plan and execute, coalesces factual progress, and maps immutable Core outcomes to localized UI categories. It never revalidates files, chooses keepers, or makes recycle decisions. Any completed or cancelled cleanup attempt requires a fresh scan before the old verified result can be reviewed for cleanup again; the original snapshot is never edited to simulate post-cleanup truth.
+
+## Settings and appearance
+
+The App owns the single persisted v1 preference: `AppearancePreference`. `WindowsAppSettingsStore` maps only that typed key to packaged local settings; scan roots, file paths, results, selections, and cleanup outcomes remain in memory only. `SettingsViewModel` applies System, Light, or Dark through the shell's requested theme; page-local theme code is not used.

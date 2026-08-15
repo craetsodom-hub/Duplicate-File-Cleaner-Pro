@@ -19,6 +19,8 @@ using DuplicateFileCleanerPro.App.Results;
 using DuplicateFileCleanerPro.App.Cleanup;
 using DuplicateFileCleanerPro.Core.Cleanup;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Cleanup;
+using DuplicateFileCleanerPro.App.Settings;
+using Windows.ApplicationModel;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -43,6 +45,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly SafetyOperationCoordinator safetyOperations = new();
     private readonly ScanWorkflowController scanWorkflow;
     private readonly CleanupWorkflowViewModel cleanupWorkflow;
+    private readonly SettingsViewModel settingsViewModel;
     private readonly Stopwatch scanStopwatch = new();
     private readonly DispatcherQueueTimer elapsedTimer;
     private string? setupNotice;
@@ -52,20 +55,24 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public ResultsReviewViewModel? ResultsViewModel { get; private set; }
 
-    public MainWindow()
+    public MainWindow(AppSettingsService settings)
     {
         scanWorkflow = new ScanWorkflowController(
             new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService()),
             safetyOperations);
         cleanupWorkflow = new CleanupWorkflowViewModel(
             new CleanupEngine(new WindowsCleanupPlatformService(), safetyOperations));
+        settingsViewModel = new SettingsViewModel(settings, ApplyAppearance);
         InitializeComponent();
         LocationsList.ItemsSource = selectedRoots;
         _windowProcedure = WindowProcedure;
         ConfigureMinimumWindowSize();
         ShellNavigation.SelectionChanged += OnNavigationSelectionChanged;
         ShellNavigation.ActualThemeChanged += OnActualThemeChanged;
-        Title = "Duplicate File Cleaner Pro";
+        ApplyAppearance(settingsViewModel.Appearance);
+        AppearanceComboBox.SelectedIndex = (int)settingsViewModel.Appearance;
+        AppVersionText.Text = AppVersionFormatter.Format(Package.Current.Id.Version.Major, Package.Current.Id.Version.Minor, Package.Current.Id.Version.Build, Package.Current.Id.Version.Revision);
+        Title = Package.Current.DisplayName;
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(ShellNavigation);
         ConfigureCaptionButtons();
@@ -102,6 +109,26 @@ public sealed partial class MainWindow : Window, IDisposable
     private static int ScaleForDpi(int pixelsAt96Dpi, uint dpi) => (int)Math.Ceiling(pixelsAt96Dpi * dpi / 96.0);
 
     private void OnActualThemeChanged(FrameworkElement sender, object args) => ConfigureCaptionButtons();
+
+    private void ApplyAppearance(AppearancePreference appearance)
+    {
+        ShellNavigation.RequestedTheme = appearance switch
+        {
+            AppearancePreference.Light => ElementTheme.Light,
+            AppearancePreference.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+        ConfigureCaptionButtons();
+    }
+
+    private void OnAppearanceSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (AppearanceComboBox.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse(tag, ignoreCase: false, out AppearancePreference appearance))
+        {
+            settingsViewModel.SetAppearance(appearance);
+        }
+    }
 
     private void ConfigureCaptionButtons()
     {

@@ -1,10 +1,12 @@
 using Microsoft.UI.Xaml;
+using DuplicateFileCleanerPro.App.Settings;
 
 namespace DuplicateFileCleanerPro.App;
 
 public partial class App : Application
 {
     private Window? window;
+    private readonly AppSettingsService settings = new(new WindowsAppSettingsStore());
 
     public App()
     {
@@ -13,7 +15,7 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        window = new MainWindow();
+        window = new MainWindow(settings);
         window.Activate();
     }
 }

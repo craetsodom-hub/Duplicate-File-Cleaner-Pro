@@ -21,8 +21,7 @@
   <data name="ReviewTitle.Text" xml:space="preserve"><value>Review before scanning</value></data>
   <data name="ReviewDescription.Text" xml:space="preserve"><value>Add folders to prepare your scan.</value></data>
   <data name="SettingsTitle.Text" xml:space="preserve"><value>Settings</value></data>
-  <data name="SettingsSectionTitle.Text" xml:space="preserve"><value>Application preferences</value></data>
-  <data name="SettingsDescription.Text" xml:space="preserve"><value>No preferences are available.</value></data>
+  <data name="SettingsDescription.Text" xml:space="preserve"><value>Manage appearance and review fixed privacy and safety behavior.</value></data>
   <data name="ScanningTitle.Text" xml:space="preserve"><value>Scanning</value></data>
   <data name="ScanningDescription.Text" xml:space="preserve"><value>Processing selected local locations.</value></data>
   <data name="ScanningWaiting.Text" xml:space="preserve"><value>Preparing scan session</value></data>
@@ -135,4 +134,18 @@
   <data name="CleanupOutcomeRecycleBinFailed" xml:space="preserve"><value>File could not be moved to the Recycle Bin</value></data>
   <data name="CleanupOutcomeCancelled" xml:space="preserve"><value>Not processed because cleanup was cancelled</value></data>
   <data name="CleanupOutcomePlatformFailed" xml:space="preserve"><value>Cleanup could not complete for this file</value></data>
+  <data name="SettingsAppearanceTitle.Text" xml:space="preserve"><value>Appearance</value></data>
+  <data name="SettingsAppearanceDescription.Text" xml:space="preserve"><value>Choose how Duplicate File Cleaner Pro follows the Windows theme.</value></data>
+  <data name="AppearanceComboBox.AutomationProperties.Name" xml:space="preserve"><value>Application appearance</value></data>
+  <data name="AppearanceSystem.Content" xml:space="preserve"><value>Use system setting</value></data>
+  <data name="AppearanceLight.Content" xml:space="preserve"><value>Light</value></data>
+  <data name="AppearanceDark.Content" xml:space="preserve"><value>Dark</value></data>
+  <data name="SettingsPrivacyTitle.Text" xml:space="preserve"><value>Privacy</value></data>
+  <data name="SettingsPrivacyDescription.Text" xml:space="preserve"><value>File analysis stays on this device. No file contents, filenames, or paths are uploaded. The app has no account, telemetry, analytics, or cloud processing.</value></data>
+  <data name="SettingsPrivacyStorage.Text" xml:space="preserve"><value>Scan and cleanup history are not stored. Only your appearance preference is saved locally.</value></data>
+  <data name="SettingsSafetyTitle.Text" xml:space="preserve"><value>Safety</value></data>
+  <data name="SettingsSafetyDescription.Text" xml:space="preserve"><value>Only verified exact duplicates are shown. Cleanup uses the Windows Recycle Bin and checks files again before moving them.</value></data>
+  <data name="SettingsAboutTitle.Text" xml:space="preserve"><value>About</value></data>
+  <data name="SettingsAboutDescription.Text" xml:space="preserve"><value>Duplicate File Cleaner Pro</value></data>
+  <data name="AppVersionText.AutomationProperties.Name" xml:space="preserve"><value>Application version</value></data>
 </root>
