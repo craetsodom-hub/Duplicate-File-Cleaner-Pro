@@ -1157,7 +1157,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void UpdateResultsDetailsLayout()
     {
-        bool wide = PageHost.ActualWidth >= 1000;
+        // NavigationView can defer PageHost's layout update while the Results page switches,
+        // so use the already-arranged window width as a stable fallback for the pane breakpoint.
+        double availableWidth = Math.Max(PageHost.ActualWidth, WindowRoot.ActualWidth);
+        bool wide = availableWidth >= 1000;
         ResultsDetailsPane.Visibility = detailsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
         ResultsDetailsColumn.Width = detailsPaneOpen && wide ? new GridLength(340) : new GridLength(0);
         Grid.SetColumn(ResultsDetailsPane, wide ? 1 : 0);
