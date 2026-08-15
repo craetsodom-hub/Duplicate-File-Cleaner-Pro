@@ -2,7 +2,7 @@
 
 Duplicate File Cleaner Pro is a Windows desktop application being engineered for safe, exact local-file duplicate cleanup.
 
-Status: **Phase 4 — real read-only scan workflow and exact duplicate detection**. Results review and cleanup are not implemented; the application is not production-ready.
+Status: **Phase 14 — premium scan configuration and product UX**. The application provides local exact-duplicate discovery, review, Recycle Bin-only cleanup, reusable scan profiles, precise criteria, and persisted setup preferences.
 
 ## Technology
 
@@ -13,7 +13,8 @@ C#, .NET 10, WinUI 3, Windows App SDK 2.3.1 Stable, packaged MSIX-ready desktop 
 - `src/DuplicateFileCleanerPro.App` — packaged WinUI application shell.
 - `src/DuplicateFileCleanerPro.Core` — platform-independent domain and safety logic.
 - `src/DuplicateFileCleanerPro.Infrastructure.Windows` — Windows filesystem identity, discovery, and read-only content analysis.
-- `tests/DuplicateFileCleanerPro.Core.Tests` — Core safety and architecture tests.
+- `tests/DuplicateFileCleanerPro.Core.Tests` — deterministic Core, configuration, persistence, presentation, safety, localization, and accessibility tests.
+- `tests/DuplicateFileCleanerPro.IntegrationTests` — real Windows filesystem, pipeline, cleanup, E2E, stress, and committed-corpus coverage.
 - `docs` — governing engineering and safety documentation.
 
 ## Safety first

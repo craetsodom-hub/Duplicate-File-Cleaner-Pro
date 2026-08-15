@@ -12,7 +12,7 @@
   <data name="ScanNavigationItem.Content" xml:space="preserve"><value>Scan</value></data>
   <data name="SettingsNavigationItem.Content" xml:space="preserve"><value>Settings</value></data>
   <data name="ScanSetupTitle.Text" xml:space="preserve"><value>Scan setup</value></data>
-  <data name="ScanSetupDescription.Text" xml:space="preserve"><value>Add folders to prepare a scan.</value></data>
+  <data name="ScanSetupDescription.Text" xml:space="preserve"><value>Choose local sources, precise file criteria, and reusable exclusions.</value></data>
   <data name="ScanLocationsTitle.Text" xml:space="preserve"><value>Scan locations</value></data>
   <data name="ScanLocationsEmpty.Text" xml:space="preserve"><value>No folders added.</value></data>
   <data name="AddFolderButton.Content" xml:space="preserve"><value>Add folder</value></data>
@@ -141,7 +141,7 @@
   <data name="AppearanceDark.Content" xml:space="preserve"><value>Dark</value></data>
   <data name="SettingsPrivacyTitle.Text" xml:space="preserve"><value>Privacy</value></data>
   <data name="SettingsPrivacyDescription.Text" xml:space="preserve"><value>File analysis stays on this device. No file contents, filenames, or paths are uploaded. The app has no account, telemetry, analytics, or cloud processing.</value></data>
-  <data name="SettingsPrivacyStorage.Text" xml:space="preserve"><value>Scan and cleanup history are not stored. Only your appearance preference is saved locally.</value></data>
+  <data name="SettingsPrivacyStorage.Text" xml:space="preserve"><value>Scan and cleanup history are not stored. Appearance, reusable scan setup, exclusions, and saved profiles are stored locally on this device.</value></data>
   <data name="SettingsSafetyTitle.Text" xml:space="preserve"><value>Safety</value></data>
   <data name="SettingsSafetyDescription.Text" xml:space="preserve"><value>Only verified exact duplicates are shown. Cleanup uses the Windows Recycle Bin and checks files again before moving them.</value></data>
   <data name="SettingsAboutTitle.Text" xml:space="preserve"><value>About</value></data>
@@ -166,4 +166,98 @@
   <data name="ScanLocalPrivacy.Text" xml:space="preserve"><value>Analysis runs locally. No filenames, paths, or file contents leave this device.</value></data>
   <data name="CleanupGroupHeader.Text" xml:space="preserve"><value>Group</value></data>
   <data name="CleanupFileHeader.Text" xml:space="preserve"><value>Selected file and location</value></data>
+  <data name="ScanProfileTitle.Text" xml:space="preserve"><value>Scan profile</value></data>
+  <data name="ScanProfileDescription.Text" xml:space="preserve"><value>Start with a focused profile, then refine any criterion.</value></data>
+  <data name="ProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>Active scan profile</value></data>
+  <data name="SaveProfileButton.Content" xml:space="preserve"><value>Save as profile</value></data>
+  <data name="SaveProfileButton.AutomationProperties.Name" xml:space="preserve"><value>Save current scan criteria and exclusions as a reusable profile</value></data>
+  <data name="DeleteProfileButton.Content" xml:space="preserve"><value>Delete profile</value></data>
+  <data name="DeleteProfileButton.AutomationProperties.Name" xml:space="preserve"><value>Delete selected saved scan profile</value></data>
+  <data name="ProfileAllFilesName" xml:space="preserve"><value>All files</value></data>
+  <data name="ProfileAllFilesDescription" xml:space="preserve"><value>Every supported local regular file, at any size.</value></data>
+  <data name="ProfileLargeFilesName" xml:space="preserve"><value>Large files</value></data>
+  <data name="ProfileLargeFilesDescription" xml:space="preserve"><value>All file types that are 100 MB or larger.</value></data>
+  <data name="ProfilePhotosVideosName" xml:space="preserve"><value>Photos &amp; videos</value></data>
+  <data name="ProfilePhotosVideosDescription" xml:space="preserve"><value>Common image and video formats.</value></data>
+  <data name="ProfileDocumentsName" xml:space="preserve"><value>Documents</value></data>
+  <data name="ProfileDocumentsDescription" xml:space="preserve"><value>Documents, PDFs, spreadsheets, presentations, and text.</value></data>
+  <data name="ProfileMusicName" xml:space="preserve"><value>Music &amp; audio</value></data>
+  <data name="ProfileMusicDescription" xml:space="preserve"><value>Common music and audio formats.</value></data>
+  <data name="ProfileCustomName" xml:space="preserve"><value>Custom setup</value></data>
+  <data name="ProfileCustomDescription" xml:space="preserve"><value>Your current combination of file types, sizes, and exclusions.</value></data>
+  <data name="SavedProfileDescription" xml:space="preserve"><value>Saved custom criteria and reusable exclusions.</value></data>
+  <data name="LocationsList.AutomationProperties.Name" xml:space="preserve"><value>Selected local scan sources</value></data>
+  <data name="RemoveSourceButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="RemoveSourceButton.AutomationProperties.Name" xml:space="preserve"><value>Remove this local scan source</value></data>
+  <data name="AvailableDrivesComboBox.PlaceholderText" xml:space="preserve"><value>Select a local drive</value></data>
+  <data name="AvailableDrivesComboBox.AutomationProperties.Name" xml:space="preserve"><value>Available ready local drives</value></data>
+  <data name="AddDriveButton.Content" xml:space="preserve"><value>Add drive</value></data>
+  <data name="AddDriveButton.AutomationProperties.Name" xml:space="preserve"><value>Add selected local drive as a scan source</value></data>
+  <data name="IncludeSubfoldersToggle.Header" xml:space="preserve"><value>Include subfolders</value></data>
+  <data name="IncludeSubfoldersToggle.OnContent" xml:space="preserve"><value>On</value></data>
+  <data name="IncludeSubfoldersToggle.OffContent" xml:space="preserve"><value>Off</value></data>
+  <data name="IncludeSubfoldersToggle.AutomationProperties.Name" xml:space="preserve"><value>Include folders below each selected source</value></data>
+  <data name="SourceFolderType" xml:space="preserve"><value>Local folder</value></data>
+  <data name="DriveCapacityFormat" xml:space="preserve"><value>{0} free of {1}</value></data>
+  <data name="FileCriteriaTitle.Text" xml:space="preserve"><value>File criteria</value></data>
+  <data name="FileCriteriaDescription.Text" xml:space="preserve"><value>Filter discovery before any content analysis begins.</value></data>
+  <data name="FileTypesLabel.Text" xml:space="preserve"><value>File types</value></data>
+  <data name="DocumentsCheckBox.Content" xml:space="preserve"><value>Documents</value></data>
+  <data name="ImagesCheckBox.Content" xml:space="preserve"><value>Images</value></data>
+  <data name="AudioCheckBox.Content" xml:space="preserve"><value>Audio</value></data>
+  <data name="VideoCheckBox.Content" xml:space="preserve"><value>Video</value></data>
+  <data name="ArchivesCheckBox.Content" xml:space="preserve"><value>Archives</value></data>
+  <data name="OtherCheckBox.Content" xml:space="preserve"><value>Other</value></data>
+  <data name="CustomExtensionsLabel.Text" xml:space="preserve"><value>Also include custom extensions</value></data>
+  <data name="CustomExtensionTextBox.PlaceholderText" xml:space="preserve"><value>Example: .blend</value></data>
+  <data name="CustomExtensionTextBox.AutomationProperties.Name" xml:space="preserve"><value>Custom file extension to include</value></data>
+  <data name="AddCustomExtensionButton.Content" xml:space="preserve"><value>Add</value></data>
+  <data name="AddCustomExtensionButton.AutomationProperties.Name" xml:space="preserve"><value>Add custom included extension</value></data>
+  <data name="CustomExtensionsList.AutomationProperties.Name" xml:space="preserve"><value>Custom included file extensions</value></data>
+  <data name="RemoveCustomExtensionButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="RemoveCustomExtensionButton.AutomationProperties.Name" xml:space="preserve"><value>Remove this custom included extension</value></data>
+  <data name="FileSizeLabel.Text" xml:space="preserve"><value>File size</value></data>
+  <data name="MinimumSizeNumberBox.Header" xml:space="preserve"><value>Minimum (MB)</value></data>
+  <data name="MinimumSizeNumberBox.AutomationProperties.Name" xml:space="preserve"><value>Minimum file size in megabytes</value></data>
+  <data name="MaximumSizeNumberBox.Header" xml:space="preserve"><value>Maximum (MB, optional)</value></data>
+  <data name="MaximumSizeNumberBox.AutomationProperties.Name" xml:space="preserve"><value>Optional maximum file size in megabytes</value></data>
+  <data name="FileSizeHint.Text" xml:space="preserve"><value>Bounds are inclusive. Leave maximum blank for no upper limit.</value></data>
+  <data name="ExclusionsTitle.Text" xml:space="preserve"><value>Reusable exclusions</value></data>
+  <data name="ExclusionsDescription.Text" xml:space="preserve"><value>Excluded folders and extensions stay available for future scans and override includes.</value></data>
+  <data name="ExcludedFoldersLabel.Text" xml:space="preserve"><value>Folders to skip</value></data>
+  <data name="ExcludedFoldersEmpty.Text" xml:space="preserve"><value>No excluded folders.</value></data>
+  <data name="ExcludedFoldersList.AutomationProperties.Name" xml:space="preserve"><value>Reusable excluded folders</value></data>
+  <data name="AddExcludedFolderButton.Content" xml:space="preserve"><value>Add excluded folder</value></data>
+  <data name="AddExcludedFolderButton.AutomationProperties.Name" xml:space="preserve"><value>Choose a local folder to exclude from discovery</value></data>
+  <data name="RemoveExcludedFolderButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="RemoveExcludedFolderButton.AutomationProperties.Name" xml:space="preserve"><value>Remove this folder exclusion</value></data>
+  <data name="ExcludedExtensionsLabel.Text" xml:space="preserve"><value>Extensions to skip</value></data>
+  <data name="ExcludedExtensionTextBox.PlaceholderText" xml:space="preserve"><value>Example: .tmp</value></data>
+  <data name="ExcludedExtensionTextBox.AutomationProperties.Name" xml:space="preserve"><value>File extension to exclude</value></data>
+  <data name="AddExcludedExtensionButton.Content" xml:space="preserve"><value>Add</value></data>
+  <data name="AddExcludedExtensionButton.AutomationProperties.Name" xml:space="preserve"><value>Add reusable excluded extension</value></data>
+  <data name="ExcludedExtensionsEmpty.Text" xml:space="preserve"><value>No excluded extensions.</value></data>
+  <data name="ExcludedExtensionsList.AutomationProperties.Name" xml:space="preserve"><value>Reusable excluded file extensions</value></data>
+  <data name="RemoveExcludedExtensionButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="RemoveExcludedExtensionButton.AutomationProperties.Name" xml:space="preserve"><value>Remove this extension exclusion</value></data>
+  <data name="SaveProfileNameLabel" xml:space="preserve"><value>Profile name</value></data>
+  <data name="SaveProfileNamePlaceholder" xml:space="preserve"><value>Example: Monthly photo cleanup</value></data>
+  <data name="SaveProfileDialogTitle" xml:space="preserve"><value>Save custom scan profile</value></data>
+  <data name="SaveProfileDialogSave" xml:space="preserve"><value>Save profile</value></data>
+  <data name="DialogCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="DeleteProfileDialogTitle" xml:space="preserve"><value>Delete saved profile?</value></data>
+  <data name="DeleteProfileDialogDescription" xml:space="preserve"><value>The current criteria stay on screen. This only removes the reusable profile.</value></data>
+  <data name="DeleteProfileDialogDelete" xml:space="preserve"><value>Delete profile</value></data>
+  <data name="ProfileSavedNotice" xml:space="preserve"><value>The custom scan profile was saved locally.</value></data>
+  <data name="ProfileDeletedNotice" xml:space="preserve"><value>The saved profile was removed. Current criteria are unchanged.</value></data>
+  <data name="InvalidExtensionNotice" xml:space="preserve"><value>Enter one file extension using letters or numbers, such as .raw.</value></data>
+  <data name="NoFileTypesNotice" xml:space="preserve"><value>Select at least one file type or add a custom extension.</value></data>
+  <data name="InvalidSizeRangeNotice" xml:space="preserve"><value>Maximum file size must be greater than or equal to minimum file size.</value></data>
+  <data name="CriteriaSummaryFormat" xml:space="preserve"><value>{0} · {1} custom extensions · {2} exclusions · {3}</value></data>
+  <data name="CriteriaAllTypes" xml:space="preserve"><value>All file types</value></data>
+  <data name="CriteriaSelectedTypesFormat" xml:space="preserve"><value>{0} file types</value></data>
+  <data name="CriteriaAnySize" xml:space="preserve"><value>Any size</value></data>
+  <data name="CriteriaMinimumSizeFormat" xml:space="preserve"><value>At least {0:N0} MB</value></data>
+  <data name="CriteriaMaximumSizeFormat" xml:space="preserve"><value>Up to {0:N0} MB</value></data>
+  <data name="CriteriaSizeRangeFormat" xml:space="preserve"><value>{0:N0}–{1:N0} MB</value></data>
 </root>

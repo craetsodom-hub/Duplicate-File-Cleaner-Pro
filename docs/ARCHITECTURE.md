@@ -17,7 +17,7 @@ Core -> no App or Infrastructure dependency
 
 Core has no Windows or UI dependency. One explicit worker boundary surrounds the discovery/analysis pipeline even when dependencies complete synchronously. Infrastructure never knows UI state; App does not decide filesystem safety. No repository/factory framework, database, global mutable scan state, or service locator is present.
 
-The scan workflow controller owns one active run, cancellation, state, failure, and in-memory result lifetime. The Window only translates those states into controls and guards/coalesces dispatcher updates by run generation.
+The scan workflow controller owns one active run, cancellation, state, failure, and in-memory result lifetime. The Window only translates those states into controls and guards/coalesces dispatcher updates by run generation. Phase 14 criteria are immutable Core values passed in `DiscoveryPolicy`; Windows discovery applies them before exact-content analysis and reports each intentional rejection without weakening the existing local-file eligibility checks.
 
 ## Results review state
 
@@ -31,9 +31,9 @@ Cleanup planning and survivor/outcome semantics live in Core. Cleanup execution 
 
 `CleanupWorkflowViewModel` is App-owned, session-only presentation state. It snapshots the Phase 5 review handoff at the explicit confirmation boundary, asks Core to plan and execute, coalesces factual progress, and maps immutable Core outcomes to localized UI categories. It never revalidates files, chooses keepers, or makes recycle decisions. Any completed or cancelled cleanup attempt requires a fresh scan before the old verified result can be reviewed for cleanup again; the original snapshot is never edited to simulate post-cleanup truth.
 
-## Settings and appearance
+## Settings, scan setup, and appearance
 
-The App owns the single persisted v1 preference: `AppearancePreference`. `WindowsAppSettingsStore` maps only that typed key to packaged local settings; scan roots, file paths, results, selections, and cleanup outcomes remain in memory only. `SettingsViewModel` applies System, Light, or Dark through the shell's requested theme; page-local theme code is not used.
+The App owns typed appearance and reusable scan-setup persistence. `WindowsAppSettingsStore` maps those values to packaged local settings; malformed settings fall back to normalized defaults. Sources, criteria, exclusions, and user-named profiles persist locally, while scan results, review selections, cleanup plans, and cleanup outcomes remain session-only. `SettingsViewModel` applies System, Light, or Dark through the shell's requested theme; page-local theme code is not used.
 
 ## Accessibility baseline
 

@@ -25,6 +25,14 @@ public sealed class AccessibilityAuditTests
             "CancelCleanupButton.AutomationProperties.Name",
             "AppearanceComboBox.AutomationProperties.Name",
             "ResultsSelectionNotice.Message",
+            "ProfileComboBox.AutomationProperties.Name",
+            "LocationsList.AutomationProperties.Name",
+            "AvailableDrivesComboBox.AutomationProperties.Name",
+            "IncludeSubfoldersToggle.AutomationProperties.Name",
+            "CustomExtensionTextBox.AutomationProperties.Name",
+            "MinimumSizeNumberBox.AutomationProperties.Name",
+            "ExcludedFoldersList.AutomationProperties.Name",
+            "ExcludedExtensionTextBox.AutomationProperties.Name",
         })
         {
             StringAssert.Contains(resources, $"name=\"{key}\"");
@@ -32,6 +40,10 @@ public sealed class AccessibilityAuditTests
 
         StringAssert.Contains(xaml, "AutomationProperties.LiveSetting=\"Polite\"");
         StringAssert.Contains(xaml, "x:Name=\"ResultsSelectionNotice\"");
+        StringAssert.Contains(xaml, "x:Name=\"ScanSetupNotice\"");
+        StringAssert.Contains(xaml, "x:Name=\"ProfileComboBox\"");
+        StringAssert.Contains(xaml, "x:Name=\"IncludeSubfoldersToggle\"");
+        StringAssert.Contains(xaml, "AutomationProperties.HeadingLevel=\"Level2\"");
         StringAssert.Contains(codeBehind, "DefaultButton = ContentDialogButton.Close");
         StringAssert.Contains(codeBehind, "AccessibilitySettings().HighContrast");
         StringAssert.Contains(codeBehind, "AutomationProperties.SetLiveSetting(CleanupActivityText");

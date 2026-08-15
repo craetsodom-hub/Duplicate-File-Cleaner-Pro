@@ -64,7 +64,7 @@ function Assert-RecycleBinBoundary {
 
     $text = Get-Content -LiteralPath $boundary -Raw
     foreach ($fragment in $required) {
-        if (-not $text.Contains($fragment, [StringComparison]::Ordinal)) {
+        if ($text.IndexOf($fragment, [StringComparison]::Ordinal) -lt 0) {
             throw "Recycle Bin boundary is missing required structure: $fragment"
         }
     }
@@ -86,19 +86,19 @@ function Assert-AccessibilityMarkers {
     $codeBehind = Get-Content -LiteralPath 'src\DuplicateFileCleanerPro.App\MainWindow.xaml.cs' -Raw
     $resources = Get-Content -LiteralPath 'src\DuplicateFileCleanerPro.App\Strings\en-US\Resources.resw' -Raw
     foreach ($marker in @('ResultsSelectionNotice', 'AutomationProperties.LiveSetting="Polite"', 'AutomationProperties.HeadingLevel="Level1"')) {
-        if (-not $xaml.Contains($marker, [StringComparison]::Ordinal)) {
+        if ($xaml.IndexOf($marker, [StringComparison]::Ordinal) -lt 0) {
             throw "Accessibility marker is missing from the shell: $marker"
         }
     }
-    if (-not $codeBehind.Contains('AccessibilitySettings().HighContrast', [StringComparison]::Ordinal)) {
+    if ($codeBehind.IndexOf('AccessibilitySettings().HighContrast', [StringComparison]::Ordinal) -lt 0) {
         throw 'High-contrast caption-color fallback is missing.'
     }
-    if (-not $codeBehind.Contains('AutomationProperties.SetLiveSetting(CleanupActivityText', [StringComparison]::Ordinal)) {
+    if ($codeBehind.IndexOf('AutomationProperties.SetLiveSetting(CleanupActivityText', [StringComparison]::Ordinal) -lt 0) {
         throw 'Cleanup progress live-status marker is missing.'
     }
     foreach ($key in @('ResultsSelectionNotice.Message', 'ResultsDescendingButton.AutomationProperties.Name', 'ScanProgressBar.AutomationProperties.Name')) {
         $expectedName = 'name="' + $key + '"'
-        if (-not $resources.Contains($expectedName, [StringComparison]::Ordinal)) {
+        if ($resources.IndexOf($expectedName, [StringComparison]::Ordinal) -lt 0) {
             throw "Localized accessibility resource is missing: $key"
         }
     }

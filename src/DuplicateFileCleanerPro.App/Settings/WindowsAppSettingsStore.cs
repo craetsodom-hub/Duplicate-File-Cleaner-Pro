@@ -2,7 +2,7 @@ using Windows.Storage;
 
 namespace DuplicateFileCleanerPro.App.Settings;
 
-/// <summary>Minimal packaged-app local preference storage; it stores no product/session data.</summary>
+/// <summary>Packaged-app local preference storage for appearance and reusable scan setup; it stores no scan history or results.</summary>
 public sealed class WindowsAppSettingsStore : IAppSettingsStore
 {
     private readonly ApplicationDataContainer values = ApplicationData.Current.LocalSettings;

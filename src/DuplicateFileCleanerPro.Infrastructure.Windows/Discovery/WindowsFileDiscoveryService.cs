@@ -17,10 +17,15 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
         await Task.Yield();
         List<DiscoveredFile> files = [];
         List<SkippedDiscoveryItem> skipped = [];
+        List<string> excludedFolders = NormalizeExcludedFolders(policy.ExcludedFolders);
         Stack<string> directories = new();
         foreach (ScanRoot root in roots.Reverse())
         {
-            if (IsLocalDirectory(root.NormalizedPath))
+            if (IsExcludedPath(root.NormalizedPath, excludedFolders))
+            {
+                skipped.Add(new SkippedDiscoveryItem(root.NormalizedPath, DiscoverySkipReason.FolderExcluded));
+            }
+            else if (IsLocalDirectory(root.NormalizedPath))
             {
                 directories.Push(root.NormalizedPath);
             }
@@ -39,6 +44,12 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
             }
 
             string directory = directories.Pop();
+            if (IsExcludedPath(directory, excludedFolders))
+            {
+                skipped.Add(new SkippedDiscoveryItem(directory, DiscoverySkipReason.FolderExcluded));
+                continue;
+            }
+
             if (!WindowsFileInspector.TryInspectDirectory(directory, out WindowsFileInspector.FileSnapshot? directoryBefore)
                 || directoryBefore is null)
             {
@@ -106,7 +117,7 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
                         await Task.Yield();
                     }
 
-                    InspectEntry(entry, policy, directories, files, skipped);
+                    InspectEntry(entry, policy, excludedFolders, directories, files, skipped);
                 }
             }
             catch (UnauthorizedAccessException)
@@ -141,6 +152,7 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
     private static void InspectEntry(
         string entry,
         DiscoveryPolicy policy,
+        IReadOnlyList<string> excludedFolders,
         Stack<string> directories,
         List<DiscoveredFile> files,
         List<SkippedDiscoveryItem> skipped)
@@ -170,10 +182,22 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
 
         if (isDirectory)
         {
+            if (IsExcludedPath(entry, excludedFolders))
+            {
+                skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.FolderExcluded));
+                return;
+            }
+
             DiscoverySkipReason? policyReason = GetPolicySkipReason(attributes, policy);
             if (policyReason is not null)
             {
                 skipped.Add(new SkippedDiscoveryItem(entry, policyReason.Value));
+                return;
+            }
+
+            if (!policy.IncludeSubfolders)
+            {
+                skipped.Add(new SkippedDiscoveryItem(entry, DiscoverySkipReason.SubfolderExcluded));
                 return;
             }
 
@@ -205,6 +229,23 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
             if (policyReason is not null)
             {
                 skipped.Add(new SkippedDiscoveryItem(entry, policyReason.Value));
+                return;
+            }
+
+            ScanCriteriaRejection criteriaRejection = policy.Criteria.Evaluate(
+                Path.GetExtension(entry),
+                snapshot.Length,
+                policy.ExcludedExtensions);
+            if (criteriaRejection != ScanCriteriaRejection.None)
+            {
+                skipped.Add(new SkippedDiscoveryItem(entry, criteriaRejection switch
+                {
+                    ScanCriteriaRejection.ExtensionExcluded => DiscoverySkipReason.ExtensionExcluded,
+                    ScanCriteriaRejection.FileTypeExcluded => DiscoverySkipReason.FileTypeExcluded,
+                    ScanCriteriaRejection.BelowMinimumSize => DiscoverySkipReason.BelowMinimumSize,
+                    ScanCriteriaRejection.AboveMaximumSize => DiscoverySkipReason.AboveMaximumSize,
+                    _ => throw new InvalidOperationException("Unexpected scan criteria result."),
+                }));
                 return;
             }
 
@@ -292,5 +333,70 @@ public sealed class WindowsFileDiscoveryService : IFileDiscoveryService
         {
             return false;
         }
+    }
+
+    private static List<string> NormalizeExcludedFolders(IEnumerable<string> folders)
+    {
+        List<string> normalized = [];
+        foreach (string folder in folders)
+        {
+            try
+            {
+                string fullPath = TrimTrailingSeparator(Path.GetFullPath(folder));
+                if (!string.IsNullOrWhiteSpace(fullPath) && !normalized.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+                {
+                    normalized.Add(fullPath);
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Invalid persisted/user criteria are ignored; they never relax filesystem safety checks.
+            }
+            catch (NotSupportedException)
+            {
+            }
+        }
+
+        return normalized;
+    }
+
+    private static bool IsExcludedPath(string path, IReadOnlyList<string> excludedFolders)
+    {
+        try
+        {
+            string candidate = TrimTrailingSeparator(Path.GetFullPath(path));
+            foreach (string excluded in excludedFolders)
+            {
+                if (candidate.Equals(excluded, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                string relative = Path.GetRelativePath(excluded, candidate);
+                if (relative != "."
+                    && relative != ".."
+                    && !Path.IsPathRooted(relative)
+                    && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (NotSupportedException)
+        {
+        }
+
+        return false;
+    }
+
+    private static string TrimTrailingSeparator(string path)
+    {
+        string root = Path.GetPathRoot(path) ?? string.Empty;
+        return path.Equals(root, StringComparison.OrdinalIgnoreCase)
+            ? path
+            : path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 }

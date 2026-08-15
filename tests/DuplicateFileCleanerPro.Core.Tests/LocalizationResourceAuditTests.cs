@@ -14,12 +14,20 @@ public sealed class LocalizationResourceAuditTests
         {
             "ScanSetupTitle.Text", "ResultsTitle.Text", "CleanupReviewTitle", "SettingsAppearanceTitle.Text",
             "SettingsPrivacyTitle.Text", "SettingsSafetyTitle.Text", "SettingsAboutTitle.Text",
+            "ScanProfileTitle.Text", "FileCriteriaTitle.Text", "ExclusionsTitle.Text",
+            "ProfileAllFilesName", "ProfileLargeFilesName", "ProfilePhotosVideosName",
+            "InvalidExtensionNotice", "InvalidSizeRangeNotice", "CriteriaSummaryFormat",
         })
         {
             StringAssert.Contains(resources, $"name=\"{key}\"");
         }
 
-        foreach (string uid in new[] { "SettingsAppearanceTitle", "SettingsPrivacyTitle", "SettingsSafetyTitle", "SettingsAboutTitle" })
+        foreach (string uid in new[]
+        {
+            "SettingsAppearanceTitle", "SettingsPrivacyTitle", "SettingsSafetyTitle", "SettingsAboutTitle",
+            "ScanProfileTitle", "FileCriteriaTitle", "ExclusionsTitle", "ProfileComboBox",
+            "IncludeSubfoldersToggle", "CustomExtensionTextBox", "ExcludedExtensionTextBox",
+        })
         {
             StringAssert.Contains(xaml, $"x:Uid=\"{uid}\"");
         }

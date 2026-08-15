@@ -30,14 +30,44 @@ public enum DiscoverySkipReason
     IdentityUnavailable,
     UnstableOrDisappeared,
     UnsupportedObject,
+    SubfolderExcluded,
+    FolderExcluded,
+    ExtensionExcluded,
+    FileTypeExcluded,
+    BelowMinimumSize,
+    AboveMaximumSize,
 }
 
 public sealed record SkippedDiscoveryItem(string Path, DiscoverySkipReason Reason);
 
-public sealed record DiscoveryPolicy(
-    bool IncludeHiddenFiles = false,
-    bool IncludeSystemFiles = false,
-    bool IncludeEncryptedFiles = false);
+public sealed record DiscoveryPolicy
+{
+    public DiscoveryPolicy(
+        bool IncludeHiddenFiles = false,
+        bool IncludeSystemFiles = false,
+        bool IncludeEncryptedFiles = false,
+        bool IncludeSubfolders = true,
+        ScanCriteria? Criteria = null,
+        IReadOnlyList<string>? ExcludedFolders = null,
+        IReadOnlyList<string>? ExcludedExtensions = null)
+    {
+        this.IncludeHiddenFiles = IncludeHiddenFiles;
+        this.IncludeSystemFiles = IncludeSystemFiles;
+        this.IncludeEncryptedFiles = IncludeEncryptedFiles;
+        this.IncludeSubfolders = IncludeSubfolders;
+        this.Criteria = Criteria ?? ScanCriteria.AllFiles;
+        this.ExcludedFolders = Array.AsReadOnly((ExcludedFolders ?? []).Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+        this.ExcludedExtensions = Array.AsReadOnly((ExcludedExtensions ?? []).Select(ScanCriteria.NormalizeExtension).Where(extension => extension is not null).Select(extension => extension!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    public bool IncludeHiddenFiles { get; }
+    public bool IncludeSystemFiles { get; }
+    public bool IncludeEncryptedFiles { get; }
+    public bool IncludeSubfolders { get; }
+    public ScanCriteria Criteria { get; }
+    public IReadOnlyList<string> ExcludedFolders { get; }
+    public IReadOnlyList<string> ExcludedExtensions { get; }
+}
 
 public sealed record RootNormalizationResult(
     IReadOnlyList<ScanRoot> Roots,

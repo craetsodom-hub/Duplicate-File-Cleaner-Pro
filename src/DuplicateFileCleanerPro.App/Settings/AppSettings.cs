@@ -11,7 +11,7 @@ public interface IAppSettingsStore
     void Write(string key, string value);
 }
 
-public sealed class AppSettingsService(IAppSettingsStore store)
+public sealed partial class AppSettingsService(IAppSettingsStore store)
 {
     public const string AppearanceKey = "AppearancePreference";
     private readonly IAppSettingsStore store = store ?? throw new ArgumentNullException(nameof(store));

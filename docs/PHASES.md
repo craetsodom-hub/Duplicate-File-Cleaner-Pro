@@ -14,5 +14,6 @@
 11. Automated end-to-end QA — unattended Windows workflow integration, bounded real Recycle Bin, adversarial safety, package smoke, and rescan/stale-state coverage
 12. Professional visual polish
 13. Microsoft Store release readiness
+14. Premium product expansion — scan profiles, source/drive management, file and size criteria, reusable exclusions, saved custom profiles, persistence, and end-to-end discovery integration
 
 Each phase must be accepted before the next phase becomes part of `main`.

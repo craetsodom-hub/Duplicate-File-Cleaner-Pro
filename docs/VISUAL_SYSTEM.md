@@ -15,3 +15,7 @@ Use native control geometry, 4px functional surfaces, one-pixel separators, and 
 ## Interaction and tables
 
 Use native hover, pressed, focus, disabled, and keyboard states. Future tables should use aligned headers, compact rows, subtle separators, and no nested-card treatment.
+
+## Premium scan setup
+
+Scan Setup uses one clear primary action, a compact profile selector, balanced source and criteria surfaces, a dedicated reusable-exclusions surface, and a factual configuration summary. Local drives show volume and capacity context; paths remain visible and tooltipped. Native check boxes, number boxes, toggle switches, combo boxes, pickers, dialogs, focus visuals, headings, and localized automation names preserve Windows interaction and accessibility behavior.

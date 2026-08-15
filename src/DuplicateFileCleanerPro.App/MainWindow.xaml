@@ -54,74 +54,95 @@
       <Grid x:Name="PageHost" Padding="{StaticResource PagePadding}">
         <ScrollViewer x:Name="ScanScrollViewer" HorizontalContentAlignment="Stretch" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
           <Grid>
-            <StackPanel x:Name="ScanPage" MaxWidth="{StaticResource ContentMaxWidth}" HorizontalAlignment="Stretch">
-              <Grid Margin="0,0,0,20" ColumnSpacing="16">
+            <StackPanel x:Name="ScanPage" MaxWidth="{StaticResource ContentMaxWidth}" HorizontalAlignment="Stretch" Spacing="16">
+              <Grid Margin="0,0,0,4" ColumnSpacing="16">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <StackPanel Spacing="3">
                   <TextBlock x:Uid="ScanSetupTitle" Style="{StaticResource PageTitleTextStyle}" AutomationProperties.HeadingLevel="Level1" />
                   <TextBlock x:Uid="ScanSetupDescription" Style="{StaticResource PageSubtitleTextStyle}" />
                 </StackPanel>
-                <Button x:Name="StartScanButton" x:Uid="StartScanButton" Grid.Column="1" MinHeight="36" Padding="16,0" VerticalAlignment="Center" Click="OnStartScanClick" Style="{StaticResource AccentButtonStyle}" />
+                <Button x:Name="StartScanButton" x:Uid="StartScanButton" Grid.Column="1" MinHeight="40" Padding="18,0" VerticalAlignment="Center" Click="OnStartScanClick" Style="{StaticResource AccentButtonStyle}" />
               </Grid>
 
-              <Grid x:Name="ScanWorkspaceGrid" ColumnSpacing="16">
-                <Grid.ColumnDefinitions><ColumnDefinition x:Name="ScanPrimaryColumn" Width="*" /><ColumnDefinition x:Name="ScanReviewColumn" Width="0" /></Grid.ColumnDefinitions>
-                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition x:Name="ScanWorkspaceSecondaryRow" Height="Auto" /></Grid.RowDefinitions>
+              <InfoBar x:Name="ScanSetupNotice" Margin="0,0,0,0" AutomationProperties.LiveSetting="Polite" IsClosable="False" IsOpen="False" Severity="Informational" />
 
-                <Border x:Name="ScanLocationsSurface" Grid.Row="0" Style="{StaticResource SurfaceBorderStyle}">
+              <Border Style="{StaticResource SurfaceBorderStyle}">
+                <Grid Padding="16,14" ColumnSpacing="16">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <StackPanel Spacing="5">
+                    <TextBlock x:Uid="ScanProfileTitle" Style="{StaticResource SectionTitleTextStyle}" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock x:Uid="ScanProfileDescription" Style="{StaticResource SecondaryTextStyle}" />
+                    <ComboBox x:Name="ProfileComboBox" x:Uid="ProfileComboBox" MinWidth="300" MaxWidth="520" HorizontalAlignment="Left" SelectionChanged="OnProfileSelectionChanged">
+                      <ComboBox.ItemTemplate><DataTemplate><StackPanel Padding="0,3" Spacing="1"><TextBlock Text="{Binding DisplayName}" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock Text="{Binding Description}" Style="{StaticResource SecondaryTextStyle}" /></StackPanel></DataTemplate></ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="SaveProfileButton" x:Uid="SaveProfileButton" MinHeight="36" Click="OnSaveProfileClick" Style="{StaticResource ToolbarButtonStyle}" />
+                    <Button x:Name="DeleteProfileButton" x:Uid="DeleteProfileButton" MinHeight="36" Click="OnDeleteProfileClick" Style="{StaticResource ToolbarButtonStyle}" Visibility="Collapsed" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <Grid x:Name="ScanWorkspaceGrid" ColumnSpacing="16" RowSpacing="16">
+                <Grid.ColumnDefinitions><ColumnDefinition x:Name="ScanPrimaryColumn" Width="*" /><ColumnDefinition x:Name="ScanReviewColumn" Width="*" /></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition x:Name="ScanWorkspaceSecondaryRow" Height="0" /></Grid.RowDefinitions>
+
+                <Border x:Name="ScanLocationsSurface" Style="{StaticResource SurfaceBorderStyle}">
                   <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <Grid Padding="16,13" ColumnSpacing="10">
                       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                       <FontIcon VerticalAlignment="Center" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Glyph="&#xE8B7;" />
-                      <StackPanel Grid.Column="1" Spacing="1">
-                        <TextBlock x:Uid="ScanLocationsTitle" Style="{StaticResource SectionTitleTextStyle}" />
-                        <TextBlock x:Uid="ScanLocationsDescription" Style="{StaticResource SecondaryTextStyle}" />
-                      </StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="1"><TextBlock x:Uid="ScanLocationsTitle" Style="{StaticResource SectionTitleTextStyle}" AutomationProperties.HeadingLevel="Level2" /><TextBlock x:Uid="ScanLocationsDescription" Style="{StaticResource SecondaryTextStyle}" /></StackPanel>
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
                       <Grid>
-                        <StackPanel x:Name="ScanLocationsEmptyPanel" MinHeight="112" Padding="18" HorizontalAlignment="Stretch" VerticalAlignment="Center" Spacing="4">
+                        <StackPanel x:Name="ScanLocationsEmptyPanel" MinHeight="126" Padding="18" HorizontalAlignment="Stretch" VerticalAlignment="Center" Spacing="4">
                           <TextBlock x:Name="ScanLocationsEmptyText" x:Uid="ScanLocationsEmpty" HorizontalAlignment="Center" Style="{StaticResource BodyStrongTextStyle}" />
                           <TextBlock x:Uid="ScanEmptyHint" MaxWidth="420" HorizontalAlignment="Center" TextAlignment="Center" Style="{StaticResource SecondaryTextStyle}" />
                         </StackPanel>
-                        <ListView x:Name="LocationsList" MaxHeight="430" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource CompactListViewItemStyle}" SelectionMode="None" Visibility="Collapsed">
-                          <ListView.ItemTemplate>
-                            <DataTemplate>
-                              <Grid MinHeight="58" Padding="16,8" ColumnSpacing="12">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <Border Width="32" Height="32" VerticalAlignment="Center" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="4"><FontIcon FontSize="16" Glyph="&#xE8B7;" /></Border>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                  <TextBlock Text="{Binding DisplayName}" Style="{StaticResource BodyStrongTextStyle}" TextTrimming="CharacterEllipsis" />
-                                  <TextBlock Text="{Binding NormalizedPath}" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTipService.ToolTip="{Binding NormalizedPath}" />
-                                </StackPanel>
-                                <Button x:Uid="RemoveFolderButton" Grid.Column="2" Tag="{Binding}" VerticalAlignment="Center" Click="OnRemoveFolderClick" Style="{StaticResource ToolbarButtonStyle}" />
-                              </Grid>
-                            </DataTemplate>
-                          </ListView.ItemTemplate>
+                        <ListView x:Name="LocationsList" x:Uid="LocationsList" MaxHeight="286" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource CompactListViewItemStyle}" SelectionMode="None" Visibility="Collapsed">
+                          <ListView.ItemTemplate><DataTemplate><Grid MinHeight="64" Padding="16,8" ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><Border Width="34" Height="34" VerticalAlignment="Center" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="5"><FontIcon FontSize="16" Glyph="{Binding Glyph}" /></Border><StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1"><TextBlock Text="{Binding DisplayName}" Style="{StaticResource BodyStrongTextStyle}" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding TypeAndCapacity}" Style="{StaticResource SecondaryTextStyle}" /><TextBlock Text="{Binding NormalizedPath}" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTipService.ToolTip="{Binding NormalizedPath}" /></StackPanel><Button x:Uid="RemoveSourceButton" Grid.Column="2" Tag="{Binding}" VerticalAlignment="Center" Click="OnRemoveFolderClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid></DataTemplate></ListView.ItemTemplate>
                         </ListView>
                       </Grid>
                     </Border>
-                    <Grid Grid.Row="2" Padding="12,10"><Button x:Uid="AddFolderButton" MinHeight="36" HorizontalAlignment="Left" Click="OnAddFolderClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid>
+                    <Grid Grid.Row="2" Padding="12,10" ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><Button x:Uid="AddFolderButton" MinHeight="36" Click="OnAddFolderClick" Style="{StaticResource ToolbarButtonStyle}" /><ComboBox x:Name="AvailableDrivesComboBox" x:Uid="AvailableDrivesComboBox" Grid.Column="1" MinHeight="36" HorizontalAlignment="Stretch" DisplayMemberPath="DisplayLabel" /><Button x:Name="AddDriveButton" x:Uid="AddDriveButton" Grid.Column="2" MinHeight="36" Click="OnAddDriveClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid>
+                    <Border Grid.Row="3" Padding="16,11" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"><ToggleSwitch x:Name="IncludeSubfoldersToggle" x:Uid="IncludeSubfoldersToggle" IsOn="True" Toggled="OnIncludeSubfoldersToggled" /></Border>
                   </Grid>
                 </Border>
 
-                <Border x:Name="ScanReviewSurface" Grid.Row="1" Margin="0,16,0,0" Padding="16" Style="{StaticResource SurfaceBorderStyle}">
-                  <StackPanel Spacing="0">
-                    <TextBlock x:Uid="ReviewTitle" Style="{StaticResource SectionTitleTextStyle}" />
-                    <TextBlock x:Name="ReviewSummaryText" x:Uid="ReviewDescription" Margin="0,3,0,13" Style="{StaticResource PageSubtitleTextStyle}" />
-                    <Border Padding="0,11" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-                      <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><FontIcon FontSize="16" Glyph="&#xE9D9;" /><StackPanel Grid.Column="1" Spacing="1"><TextBlock x:Uid="ReviewMethodTitle" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock x:Uid="ReviewMethodDescription" Style="{StaticResource SecondaryTextStyle}" /></StackPanel></Grid>
+                <Border x:Name="ScanReviewSurface" Grid.Column="1" Style="{StaticResource SurfaceBorderStyle}">
+                  <StackPanel>
+                    <Grid Padding="16,13" ColumnSpacing="10"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><FontIcon VerticalAlignment="Center" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Glyph="&#xE71C;" /><StackPanel Grid.Column="1" Spacing="1"><TextBlock x:Uid="FileCriteriaTitle" Style="{StaticResource SectionTitleTextStyle}" AutomationProperties.HeadingLevel="Level2" /><TextBlock x:Uid="FileCriteriaDescription" Style="{StaticResource SecondaryTextStyle}" /></StackPanel></Grid>
+                    <Border Padding="16,12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+                      <StackPanel Spacing="8">
+                        <TextBlock x:Uid="FileTypesLabel" Style="{StaticResource BodyStrongTextStyle}" />
+                        <Grid ColumnSpacing="16" RowSpacing="6"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions><CheckBox x:Name="DocumentsCheckBox" x:Uid="DocumentsCheckBox" IsChecked="True" Checked="OnFileTypeChanged" Unchecked="OnFileTypeChanged" /><CheckBox x:Name="ImagesCheckBox" x:Uid="ImagesCheckBox" Grid.Column="1" IsChecked="True" Checked="OnFileTypeChanged" Unchecked="OnFileTypeChanged" /><CheckBox x:Name="AudioCheckBox" x:Uid="AudioCheckBox" Grid.Column="2" IsChecked="True" Checked="OnFileTypeChanged" Unchecked="OnFileTypeChanged" /><CheckBox x:Name="VideoCheckBox" x:Uid="VideoCheckBox" Grid.Row="1" IsChecked="True" Checked="OnFileTypeChanged" Unchecked="OnFileTypeChanged" /><CheckBox x:Name="ArchivesCheckBox" x:Uid="ArchivesCheckBox" Grid.Row="1" Grid.Column="1" IsChecked="True" Checked="OnFileTypeChanged" Unchecked="OnFileTypeChanged" /><CheckBox x:Name="OtherCheckBox" x:Uid="OtherCheckBox" Grid.Row="1" Grid.Column="2" IsChecked="True" Checked="OnFileTypeChanged" Unchecked="OnFileTypeChanged" /></Grid>
+                        <TextBlock x:Uid="CustomExtensionsLabel" Margin="0,4,0,0" Style="{StaticResource BodyStrongTextStyle}" />
+                        <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBox x:Name="CustomExtensionTextBox" x:Uid="CustomExtensionTextBox" MaxLength="32" KeyDown="OnCustomExtensionKeyDown" /><Button x:Uid="AddCustomExtensionButton" Grid.Column="1" MinHeight="36" Click="OnAddCustomExtensionClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid>
+                        <ListView x:Name="CustomExtensionsList" x:Uid="CustomExtensionsList" MaxHeight="92" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource CompactListViewItemStyle}" SelectionMode="None" Visibility="Collapsed"><ListView.ItemTemplate><DataTemplate><Grid MinHeight="34" Padding="8,2"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{Binding}" /><Button x:Uid="RemoveCustomExtensionButton" Grid.Column="1" MinHeight="28" Padding="8,0" Tag="{Binding}" Click="OnRemoveCustomExtensionClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid></DataTemplate></ListView.ItemTemplate></ListView>
+                      </StackPanel>
                     </Border>
-                    <Border Padding="0,11" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-                      <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><FontIcon FontSize="16" Glyph="&#xE72E;" /><StackPanel Grid.Column="1" Spacing="1"><TextBlock x:Uid="ReviewPrivacyTitle" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock x:Uid="ReviewPrivacyDescription" Style="{StaticResource SecondaryTextStyle}" /></StackPanel></Grid>
-                    </Border>
-                    <Border Padding="0,11,0,0" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-                      <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><FontIcon FontSize="16" Glyph="&#xE83D;" /><StackPanel Grid.Column="1" Spacing="1"><TextBlock x:Uid="ReviewSafetyTitle" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock x:Uid="ReviewSafetyDescription" Style="{StaticResource SecondaryTextStyle}" /></StackPanel></Grid>
+                    <Border Padding="16,12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+                      <StackPanel Spacing="8"><TextBlock x:Uid="FileSizeLabel" Style="{StaticResource BodyStrongTextStyle}" /><Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><NumberBox x:Name="MinimumSizeNumberBox" x:Uid="MinimumSizeNumberBox" Minimum="0" Maximum="8796093022208" SmallChange="1" SpinButtonPlacementMode="Compact" ValueChanged="OnSizeCriteriaChanged" /><NumberBox x:Name="MaximumSizeNumberBox" x:Uid="MaximumSizeNumberBox" Grid.Column="1" Minimum="0" Maximum="8796093022208" SmallChange="1" SpinButtonPlacementMode="Compact" ValueChanged="OnSizeCriteriaChanged" /></Grid><TextBlock x:Uid="FileSizeHint" Style="{StaticResource SecondaryTextStyle}" /></StackPanel>
                     </Border>
                   </StackPanel>
                 </Border>
               </Grid>
+
+              <Border Style="{StaticResource SurfaceBorderStyle}">
+                <StackPanel>
+                  <Grid Padding="16,13" ColumnSpacing="10"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><FontIcon VerticalAlignment="Center" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Glyph="&#xE74D;" /><StackPanel Grid.Column="1" Spacing="1"><TextBlock x:Uid="ExclusionsTitle" Style="{StaticResource SectionTitleTextStyle}" AutomationProperties.HeadingLevel="Level2" /><TextBlock x:Uid="ExclusionsDescription" Style="{StaticResource SecondaryTextStyle}" /></StackPanel></Grid>
+                  <Grid BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <StackPanel Padding="16,12" Spacing="8"><TextBlock x:Uid="ExcludedFoldersLabel" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock x:Name="ExcludedFoldersEmptyText" x:Uid="ExcludedFoldersEmpty" Style="{StaticResource SecondaryTextStyle}" /><ListView x:Name="ExcludedFoldersList" x:Uid="ExcludedFoldersList" MaxHeight="130" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource CompactListViewItemStyle}" SelectionMode="None" Visibility="Collapsed"><ListView.ItemTemplate><DataTemplate><Grid MinHeight="40" Padding="8,3"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding}" /><Button x:Uid="RemoveExcludedFolderButton" Grid.Column="1" MinHeight="30" Padding="8,0" Tag="{Binding}" Click="OnRemoveExcludedFolderClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid></DataTemplate></ListView.ItemTemplate></ListView><Button x:Uid="AddExcludedFolderButton" MinHeight="36" HorizontalAlignment="Left" Click="OnAddExcludedFolderClick" Style="{StaticResource ToolbarButtonStyle}" /></StackPanel>
+                    <StackPanel Grid.Column="1" Padding="16,12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,0,0" Spacing="8"><TextBlock x:Uid="ExcludedExtensionsLabel" Style="{StaticResource BodyStrongTextStyle}" /><Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBox x:Name="ExcludedExtensionTextBox" x:Uid="ExcludedExtensionTextBox" MaxLength="32" KeyDown="OnExcludedExtensionKeyDown" /><Button x:Uid="AddExcludedExtensionButton" Grid.Column="1" MinHeight="36" Click="OnAddExcludedExtensionClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid><TextBlock x:Name="ExcludedExtensionsEmptyText" x:Uid="ExcludedExtensionsEmpty" Style="{StaticResource SecondaryTextStyle}" /><ListView x:Name="ExcludedExtensionsList" x:Uid="ExcludedExtensionsList" MaxHeight="92" HorizontalContentAlignment="Stretch" ItemContainerStyle="{StaticResource CompactListViewItemStyle}" SelectionMode="None" Visibility="Collapsed"><ListView.ItemTemplate><DataTemplate><Grid MinHeight="34" Padding="8,2"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{Binding}" /><Button x:Uid="RemoveExcludedExtensionButton" Grid.Column="1" MinHeight="28" Padding="8,0" Tag="{Binding}" Click="OnRemoveExcludedExtensionClick" Style="{StaticResource ToolbarButtonStyle}" /></Grid></DataTemplate></ListView.ItemTemplate></ListView></StackPanel>
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <Border Padding="16" Style="{StaticResource SurfaceBorderStyle}">
+                <Grid ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel Spacing="3"><TextBlock x:Uid="ReviewTitle" Style="{StaticResource SectionTitleTextStyle}" AutomationProperties.HeadingLevel="Level2" /><TextBlock x:Name="ReviewSummaryText" x:Uid="ReviewDescription" Style="{StaticResource PageSubtitleTextStyle}" /><TextBlock x:Name="CriteriaSummaryText" Style="{StaticResource SecondaryTextStyle}" /></StackPanel><StackPanel Grid.Column="1" HorizontalAlignment="Right" Spacing="3"><TextBlock x:Uid="ReviewMethodTitle" HorizontalAlignment="Right" Style="{StaticResource BodyStrongTextStyle}" /><TextBlock x:Uid="ReviewSafetyDescription" MaxWidth="320" TextAlignment="Right" Style="{StaticResource SecondaryTextStyle}" /></StackPanel></Grid>
+              </Border>
             </StackPanel>
 
             <StackPanel x:Name="ScanningPage" MaxWidth="{StaticResource ContentMaxWidth}" HorizontalAlignment="Stretch" Visibility="Collapsed">
