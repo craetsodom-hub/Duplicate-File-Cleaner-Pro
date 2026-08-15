@@ -11,7 +11,7 @@
 8. Settings, privacy and localization — persisted appearance preference, factual privacy/safety information, and completed English resource coverage
 9. Accessibility — native keyboard/focus semantics, localized automation labels, explicit survivor-protection feedback, and disciplined operation-status announcements
 10. Reliability and performance — unattended temporary-corpus stress coverage, repeated-session resource checks, cancellation, and large Results-state validation
-11. Automated end-to-end QA
+11. Automated end-to-end QA — unattended Windows workflow integration, bounded real Recycle Bin, adversarial safety, package smoke, and rescan/stale-state coverage
 12. Professional visual polish
 13. Microsoft Store release readiness
 
