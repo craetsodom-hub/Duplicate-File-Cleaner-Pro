@@ -72,6 +72,7 @@ public sealed partial class MainWindow : Window, IDisposable
         AutomationProperties.SetLiveSetting(CleanupActivityText, AutomationLiveSetting.Polite);
         AutomationProperties.SetLiveSetting(CleanupCompletionTitle, AutomationLiveSetting.Polite);
         LocationsList.ItemsSource = selectedRoots;
+        PageHost.SizeChanged += OnPageHostSizeChanged;
         _windowProcedure = WindowProcedure;
         ConfigureMinimumWindowSize();
         ShellNavigation.SelectionChanged += OnNavigationSelectionChanged;
@@ -81,7 +82,7 @@ public sealed partial class MainWindow : Window, IDisposable
         AppVersionText.Text = AppVersionFormatter.Format(Package.Current.Id.Version.Major, Package.Current.Id.Version.Minor, Package.Current.Id.Version.Build, Package.Current.Id.Version.Revision);
         Title = Package.Current.DisplayName;
         ExtendsContentIntoTitleBar = true;
-        SetTitleBar(ShellNavigation);
+        SetTitleBar(AppTitleBar);
         ConfigureCaptionButtons();
         elapsedTimer = DispatcherQueue.CreateTimer();
         elapsedTimer.Interval = TimeSpan.FromSeconds(1);
@@ -117,9 +118,45 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnActualThemeChanged(FrameworkElement sender, object args) => ConfigureCaptionButtons();
 
+    private void OnPageHostSizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        bool isWide = args.NewSize.Width >= 800;
+        bool isToolbarWide = args.NewSize.Width >= 1000;
+
+        ScanPrimaryColumn.Width = new GridLength(isWide ? 3 : 1, GridUnitType.Star);
+        ScanReviewColumn.Width = isWide ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+        ScanWorkspaceSecondaryRow.Height = isWide ? new GridLength(0) : GridLength.Auto;
+        Grid.SetRow(ScanReviewSurface, isWide ? 0 : 1);
+        Grid.SetColumn(ScanReviewSurface, isWide ? 1 : 0);
+        ScanReviewSurface.Margin = isWide ? new Thickness(0) : new Thickness(0, 16, 0, 0);
+
+        ResultsToolbarSearchColumn.Width = isToolbarWide ? new GridLength(280) : new GridLength(1, GridUnitType.Star);
+        ResultsToolbarSortColumn.Width = GridLength.Auto;
+        ResultsToolbarDirectionColumn.Width = GridLength.Auto;
+        ResultsToolbarFilterColumn.Width = GridLength.Auto;
+        ResultsToolbarActionsColumn.Width = isToolbarWide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Grid.SetRow(ResultsSearchBox, 0);
+        Grid.SetColumn(ResultsSearchBox, 0);
+        Grid.SetColumnSpan(ResultsSearchBox, isToolbarWide ? 1 : 5);
+        ResultsSearchBox.Margin = isToolbarWide ? new Thickness(0, 0, 8, 0) : new Thickness(0, 0, 0, 8);
+        Grid.SetRow(ResultsSortComboBox, isToolbarWide ? 0 : 1);
+        Grid.SetColumn(ResultsSortComboBox, isToolbarWide ? 1 : 0);
+        ResultsSortComboBox.Margin = new Thickness(0, 0, 8, 0);
+        Grid.SetRow(ResultsDirectionButton, isToolbarWide ? 0 : 1);
+        Grid.SetColumn(ResultsDirectionButton, isToolbarWide ? 2 : 1);
+        ResultsDirectionButton.Margin = new Thickness(0, 0, 8, 0);
+        Grid.SetRow(ResultsFilterComboBox, isToolbarWide ? 0 : 1);
+        Grid.SetColumn(ResultsFilterComboBox, isToolbarWide ? 3 : 2);
+        ResultsFilterComboBox.Margin = isToolbarWide ? new Thickness(0, 0, 8, 0) : new Thickness(0);
+        Grid.SetRow(ResultsExpandPanel, isToolbarWide ? 0 : 1);
+        Grid.SetColumn(ResultsExpandPanel, isToolbarWide ? 4 : 3);
+        Grid.SetColumnSpan(ResultsExpandPanel, isToolbarWide ? 1 : 2);
+        ResultsExpandPanel.Margin = isToolbarWide ? new Thickness(0) : new Thickness(8, 0, 0, 0);
+    }
+
     private void ApplyAppearance(AppearancePreference appearance)
     {
-        ShellNavigation.RequestedTheme = appearance switch
+        WindowRoot.RequestedTheme = appearance switch
         {
             AppearancePreference.Light => ElementTheme.Light,
             AppearancePreference.Dark => ElementTheme.Dark,
@@ -628,6 +665,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private void UpdateSetupState()
     {
         bool hasRoots = selectedRoots.Count > 0;
+        ScanLocationsEmptyPanel.Visibility = hasRoots ? Visibility.Collapsed : Visibility.Visible;
         ScanLocationsEmptyText.Visibility = hasRoots ? Visibility.Collapsed : Visibility.Visible;
         LocationsList.Visibility = hasRoots ? Visibility.Visible : Visibility.Collapsed;
         StartScanButton.IsEnabled = hasRoots && !scanWorkflow.IsRunning;
@@ -649,6 +687,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         isDisposed = true;
+        PageHost.SizeChanged -= OnPageHostSizeChanged;
         activeScanGeneration++;
         elapsedTimer.Stop();
         cleanupWorkflow.Dispose();

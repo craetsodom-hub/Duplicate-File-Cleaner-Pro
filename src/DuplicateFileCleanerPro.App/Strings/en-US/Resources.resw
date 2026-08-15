@@ -151,4 +151,19 @@
   <data name="ResultsDescendingButton.AutomationProperties.Name" xml:space="preserve"><value>Change results sort direction</value></data>
   <data name="ResultsSelectionNotice.Title" xml:space="preserve"><value>Keep one verified copy</value></data>
   <data name="ResultsSelectionNotice.Message" xml:space="preserve"><value>At least one independent verified copy must remain unselected in every duplicate group.</value></data>
+  <data name="TitleBarProductName.Text" xml:space="preserve"><value>Duplicate File Cleaner Pro</value></data>
+  <data name="ScanLocationsDescription.Text" xml:space="preserve"><value>Folders included in this scan</value></data>
+  <data name="ScanEmptyHint.Text" xml:space="preserve"><value>Add one or more local folders to begin.</value></data>
+  <data name="ReviewMethodTitle.Text" xml:space="preserve"><value>Exact content matching</value></data>
+  <data name="ReviewMethodDescription.Text" xml:space="preserve"><value>Only byte-for-byte duplicate content is grouped.</value></data>
+  <data name="ReviewPrivacyTitle.Text" xml:space="preserve"><value>Local processing</value></data>
+  <data name="ReviewPrivacyDescription.Text" xml:space="preserve"><value>File analysis stays on this device.</value></data>
+  <data name="ReviewSafetyTitle.Text" xml:space="preserve"><value>Safe discovery</value></data>
+  <data name="ReviewSafetyDescription.Text" xml:space="preserve"><value>Protected links and inaccessible files are skipped safely.</value></data>
+  <data name="ScanningPreparingStage.Text" xml:space="preserve"><value>Preparing the scan</value></data>
+  <data name="ScanningStageHint.Text" xml:space="preserve"><value>Progress reflects only work the scanner can measure truthfully.</value></data>
+  <data name="ScanningCurrentActivityLabel.Text" xml:space="preserve"><value>Current activity</value></data>
+  <data name="ScanLocalPrivacy.Text" xml:space="preserve"><value>Analysis runs locally. No filenames, paths, or file contents leave this device.</value></data>
+  <data name="CleanupGroupHeader.Text" xml:space="preserve"><value>Group</value></data>
+  <data name="CleanupFileHeader.Text" xml:space="preserve"><value>Selected file and location</value></data>
 </root>
