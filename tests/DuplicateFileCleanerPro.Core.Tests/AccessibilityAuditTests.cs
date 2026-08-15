@@ -33,6 +33,10 @@ public sealed class AccessibilityAuditTests
             "MinimumSizeNumberBox.AutomationProperties.Name",
             "ExcludedFoldersList.AutomationProperties.Name",
             "ExcludedExtensionTextBox.AutomationProperties.Name",
+            "SelectionAssistantButton.AutomationProperties.Name",
+            "ExportResultsButton.AutomationProperties.Name",
+            "DetailsToggleButton.AutomationProperties.Name",
+            "OpenFileButton.AutomationProperties.Name",
         })
         {
             StringAssert.Contains(resources, $"name=\"{key}\"");
@@ -43,6 +47,8 @@ public sealed class AccessibilityAuditTests
         StringAssert.Contains(xaml, "x:Name=\"ScanSetupNotice\"");
         StringAssert.Contains(xaml, "x:Name=\"ProfileComboBox\"");
         StringAssert.Contains(xaml, "x:Name=\"IncludeSubfoldersToggle\"");
+        StringAssert.Contains(xaml, "x:Name=\"ResultsDetailsPane\"");
+        StringAssert.Contains(xaml, "x:Name=\"ResultsSelectionNotice\"");
         StringAssert.Contains(xaml, "AutomationProperties.HeadingLevel=\"Level2\"");
         StringAssert.Contains(codeBehind, "DefaultButton = ContentDialogButton.Close");
         StringAssert.Contains(codeBehind, "AccessibilitySettings().HighContrast");

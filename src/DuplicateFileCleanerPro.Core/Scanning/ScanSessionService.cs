@@ -97,7 +97,10 @@ public sealed class ScanSessionService(IFileDiscoveryService discovery, IContent
 
         cancellationToken.ThrowIfCancellationRequested();
         ReportProgress(progress, new ScanSessionProgress(ScanSessionState.Completed, string.Empty, discoveryResult.Files.Count, candidates.Count, totalCandidateBytes, totalCandidateBytes, detectionResult.Groups.Count, discoveryResult.SkippedItems.Count + detectionResult.SkippedItems.Count, false));
-        return ScanSessionResult.Completed(new CompletedScanResult(discoveryResult, detectionResult));
+        return ScanSessionResult.Completed(new CompletedScanResult(
+            discoveryResult,
+            detectionResult,
+            Array.AsReadOnly(roots.Select(root => root.NormalizedPath).ToArray())));
     }
 
     public void Dispose()

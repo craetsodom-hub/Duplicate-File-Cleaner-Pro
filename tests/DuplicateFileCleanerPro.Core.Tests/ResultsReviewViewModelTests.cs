@@ -110,7 +110,7 @@ public sealed class ResultsReviewViewModelTests
     [TestMethod]
     public void LargePresentationStateStaysCorrectAcrossThirtyThousandMembers()
     {
-        const int groupCount = 3000;
+        const int groupCount = 5000;
         var groups = new List<DuplicateFileGroup>(groupCount);
         ulong identity = 1;
         for (int group = 0; group < groupCount; group++)
@@ -131,11 +131,69 @@ public sealed class ResultsReviewViewModelTests
         Assert.AreEqual(groupCount * 10, viewModel.VerifiedMemberCount);
     }
 
-    private static CompletedScanResult Result(IEnumerable<DuplicateFileGroup> groups)
+    [TestMethod]
+    public void FileTypeSizeLocationAndSearchFiltersComposeWithoutChangingSelections()
+    {
+        var viewModel = new ResultsReviewViewModel(Result([
+            Group(9, ("photo.jpg", 512 * 1024, 1), ("photo-copy.jpg", 512 * 1024, 2)),
+            Group(30, ("report.pdf", 2 * 1024 * 1024, 3), ("report-copy.pdf", 2 * 1024 * 1024, 4))], ["C:/"]));
+        viewModel.AllGroups[1].Members[1].IsSelected = true;
+
+        viewModel.FileTypeFilter = ResultFileTypeFilter.Photos;
+        viewModel.SizeFilter = ResultSizeFilter.LessThan1Mb;
+        viewModel.LocationFilter = "C:/";
+        viewModel.SearchText = ".jpg";
+
+        Assert.HasCount(1, viewModel.VisibleGroups);
+        Assert.AreEqual("photo.jpg", viewModel.VisibleGroups[0].DisplayName);
+        Assert.AreEqual(4, viewModel.ActiveFilterCount);
+        Assert.IsTrue(viewModel.AllGroups[1].Members[1].IsSelected);
+
+        viewModel.ClearFilters();
+        Assert.HasCount(2, viewModel.VisibleGroups);
+        Assert.IsFalse(viewModel.HasActiveFilters);
+    }
+
+    [TestMethod]
+    public void SelectionAssistantIsDeterministicScopedAndUndoable()
+    {
+        var viewModel = new ResultsReviewViewModel(Result([
+            Group(20, ("same.bin", 10, 1), ("tie.bin", 10, 2), ("new.bin", 10, 3)),
+            Group(10, ("outside.bin", 10, 4), ("other.bin", 10, 5))]));
+        viewModel.SearchText = "same.bin";
+        SelectionAssistantProposal proposal = viewModel.CreateSelectionAssistantProposal(SelectionAssistantRule.KeepOldest);
+
+        Assert.AreEqual(1, proposal.AffectedGroupCount);
+        Assert.IsTrue(viewModel.ApplySelectionAssistantProposal(proposal));
+        Assert.AreEqual(2, viewModel.SelectedCandidateCount);
+        Assert.IsFalse(viewModel.AllGroups[0].Members[0].IsSelected);
+        Assert.AreEqual(0, viewModel.AllGroups[1].SelectedCandidateCount, "Filtered-out groups must not be replaced.");
+        Assert.IsTrue(viewModel.UndoLastSelectionAssistant());
+        Assert.AreEqual(0, viewModel.SelectedCandidateCount);
+    }
+
+    [TestMethod]
+    public void ReportExportIncludesEscapedFactualRowsAndHonorsCurrentFilterScope()
+    {
+        var viewModel = new ResultsReviewViewModel(Result([
+            Group(10, ("comma,name.txt", 10, 1), ("copy.txt", 10, 2)),
+            Group(20, ("other.bin", 20, 3), ("other-copy.bin", 20, 4))]));
+        viewModel.SearchText = "comma";
+        string csv = ResultReportExporter.CreateCsv(viewModel, ResultReportScope.CurrentFilteredResults);
+        string text = ResultReportExporter.CreateText(viewModel, ResultReportScope.CurrentFilteredResults);
+
+        StringAssert.Contains(csv, "\"comma,name.txt\"");
+        StringAssert.Contains(csv, "C:/folder-1/comma,name.txt");
+        Assert.IsFalse(csv.Contains("other-copy.bin", StringComparison.Ordinal));
+        StringAssert.Contains(text, "Scope: Current filtered Results");
+        Assert.IsFalse(text.Contains("other-copy.bin", StringComparison.Ordinal));
+    }
+
+    private static CompletedScanResult Result(IEnumerable<DuplicateFileGroup> groups, IReadOnlyList<string>? scanRoots = null)
     {
         List<DuplicateFileGroup> list = groups.ToList();
         long reclaimable = list.Sum(group => group.ReclaimableBytes);
-        return new CompletedScanResult(new DiscoveryResult([], [], false), new ExactDuplicateDetectionResult(list.AsReadOnly(), [], reclaimable, false));
+        return new CompletedScanResult(new DiscoveryResult([], [], false), new ExactDuplicateDetectionResult(list.AsReadOnly(), [], reclaimable, false), scanRoots);
     }
 
     private static DuplicateFileGroup Group(long reclaimable, params (string Name, long Length, ulong Identity)[] members) =>

@@ -11,6 +11,45 @@ namespace DuplicateFileCleanerPro.IntegrationTests;
 public sealed class ResultsWorkflowIntegrationTests
 {
     [TestMethod]
+    public async Task RealPipelineRootsFeedResultsTypeSizeLocationFilteringAndProposalExport()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "DuplicateFileCleanerPro.Phase15.Results", Guid.NewGuid().ToString("N"));
+        string photos = Path.Combine(root, "photos");
+        string documents = Path.Combine(root, "documents");
+        Directory.CreateDirectory(photos);
+        Directory.CreateDirectory(documents);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(photos, "image-a.jpg"), new string('p', 100));
+            await File.WriteAllTextAsync(Path.Combine(photos, "image-b.jpg"), new string('p', 100));
+            await File.WriteAllTextAsync(Path.Combine(documents, "report-a.pdf"), new string('d', 200));
+            await File.WriteAllTextAsync(Path.Combine(documents, "report-b.pdf"), new string('d', 200));
+
+            using var session = new ScanSessionService(new WindowsFileDiscoveryService(), new WindowsContentAnalysisService());
+            ScanSessionResult scan = await session.RunAsync([new ScanRoot(photos), new ScanRoot(documents)], new DiscoveryPolicy());
+            Assert.AreEqual(ScanSessionState.Completed, scan.State);
+            Assert.IsNotNull(scan.CompletedResult);
+            var review = new ResultsReviewViewModel(scan.CompletedResult);
+
+            review.FileTypeFilter = ResultFileTypeFilter.Photos;
+            review.LocationFilter = photos;
+            Assert.HasCount(1, review.VisibleGroups);
+            Assert.AreEqual("image-a.jpg", review.VisibleGroups[0].DisplayName);
+            SelectionAssistantProposal proposal = review.CreateSelectionAssistantProposal(SelectionAssistantRule.KeepOldest);
+            Assert.IsTrue(review.ApplySelectionAssistantProposal(proposal));
+            Assert.AreEqual(1, review.SelectedCandidateCount);
+            string report = ResultReportExporter.CreateCsv(review, ResultReportScope.CurrentFilteredResults);
+            StringAssert.Contains(report, "image-a.jpg");
+            Assert.IsFalse(report.Contains("report-a.pdf", StringComparison.Ordinal));
+            Assert.IsTrue(review.UndoLastSelectionAssistant());
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public async Task RealWindowsWorkflowProducesIndependentVerifiedResultsForReview()
     {
         string root = Path.Combine(Path.GetTempPath(), "DuplicateFileCleanerPro.Phase5.Results", Guid.NewGuid().ToString("N"));

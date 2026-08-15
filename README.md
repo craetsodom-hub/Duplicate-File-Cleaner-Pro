@@ -2,7 +2,7 @@
 
 Duplicate File Cleaner Pro is a Windows desktop application being engineered for safe, exact local-file duplicate cleanup.
 
-Status: **Phase 14 — premium scan configuration and product UX**. The application provides local exact-duplicate discovery, review, Recycle Bin-only cleanup, reusable scan profiles, precise criteria, and persisted setup preferences.
+Status: **Phase 15 — premium Results power tools**. The application provides local exact-duplicate discovery, filterable review, safe proposal-only selection assistance, local report export, Recycle Bin-only cleanup, reusable scan profiles, precise criteria, and persisted setup preferences.
 
 ## Technology
 

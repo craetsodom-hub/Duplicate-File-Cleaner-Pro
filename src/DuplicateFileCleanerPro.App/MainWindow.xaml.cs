@@ -24,8 +24,11 @@ using DuplicateFileCleanerPro.Infrastructure.Windows.Cleanup;
 using DuplicateFileCleanerPro.App.Settings;
 using DuplicateFileCleanerPro.App.Accessibility;
 using Windows.ApplicationModel;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
 using Windows.UI.ViewManagement;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System.Reflection;
 
 namespace DuplicateFileCleanerPro.App;
@@ -52,6 +55,9 @@ public sealed partial class MainWindow : Window, IDisposable
     private static readonly CompositeFormat CleanupConfirmDescriptionFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupConfirmDescriptionFormat"));
     private static readonly CompositeFormat CleanupProcessedFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupProcessedFormat"));
     private static readonly CompositeFormat CleanupCompletedSummaryFormat = CompositeFormat.Parse(ResourceLoader.GetString("CleanupCompletedSummaryFormat"));
+    private static readonly CompositeFormat SelectionAssistantProposalFormat = CompositeFormat.Parse(ResourceLoader.GetString("SelectionAssistantProposalFormat"));
+    private static readonly CompositeFormat SelectionAssistantAppliedFormat = CompositeFormat.Parse(ResourceLoader.GetString("SelectionAssistantAppliedFormat"));
+    private static readonly CompositeFormat ResultsActiveFiltersFormat = CompositeFormat.Parse(ResourceLoader.GetString("ResultsActiveFiltersFormat"));
     private readonly WindowsScanRootNormalizer rootNormalizer = new();
     private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
     private readonly ObservableCollection<DriveChoice> availableDrives = [];
@@ -73,6 +79,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool isDisposed;
     private bool isApplyingSetup;
     private string activeProfileId = PremiumScanProfiles.AllFilesId;
+    private CancellationTokenSource? previewCancellation;
+    private bool detailsPaneOpen;
     private IntPtr _previousWindowProcedure;
 
     public ResultsReviewViewModel? ResultsViewModel { get; private set; }
@@ -88,6 +96,7 @@ public sealed partial class MainWindow : Window, IDisposable
         settingsViewModel = new SettingsViewModel(settings, ApplyAppearance);
         isApplyingSetup = true;
         InitializeComponent();
+        UpdateResultsDetailsLayout();
         AutomationProperties.SetLiveSetting(CleanupActivityText, AutomationLiveSetting.Polite);
         AutomationProperties.SetLiveSetting(CleanupCompletionTitle, AutomationLiveSetting.Polite);
         LocationsList.ItemsSource = selectedRoots;
@@ -160,28 +169,7 @@ public sealed partial class MainWindow : Window, IDisposable
         Grid.SetColumn(ScanReviewSurface, isWide ? 1 : 0);
         ScanReviewSurface.Margin = new Thickness(0);
 
-        ResultsToolbarSearchColumn.Width = isToolbarWide ? new GridLength(280) : new GridLength(1, GridUnitType.Star);
-        ResultsToolbarSortColumn.Width = GridLength.Auto;
-        ResultsToolbarDirectionColumn.Width = GridLength.Auto;
-        ResultsToolbarFilterColumn.Width = GridLength.Auto;
-        ResultsToolbarActionsColumn.Width = isToolbarWide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        Grid.SetRow(ResultsSearchBox, 0);
-        Grid.SetColumn(ResultsSearchBox, 0);
-        Grid.SetColumnSpan(ResultsSearchBox, isToolbarWide ? 1 : 5);
-        ResultsSearchBox.Margin = isToolbarWide ? new Thickness(0, 0, 8, 0) : new Thickness(0, 0, 0, 8);
-        Grid.SetRow(ResultsSortComboBox, isToolbarWide ? 0 : 1);
-        Grid.SetColumn(ResultsSortComboBox, isToolbarWide ? 1 : 0);
-        ResultsSortComboBox.Margin = new Thickness(0, 0, 8, 0);
-        Grid.SetRow(ResultsDirectionButton, isToolbarWide ? 0 : 1);
-        Grid.SetColumn(ResultsDirectionButton, isToolbarWide ? 2 : 1);
-        ResultsDirectionButton.Margin = new Thickness(0, 0, 8, 0);
-        Grid.SetRow(ResultsFilterComboBox, isToolbarWide ? 0 : 1);
-        Grid.SetColumn(ResultsFilterComboBox, isToolbarWide ? 3 : 2);
-        ResultsFilterComboBox.Margin = isToolbarWide ? new Thickness(0, 0, 8, 0) : new Thickness(0);
-        Grid.SetRow(ResultsExpandPanel, isToolbarWide ? 0 : 1);
-        Grid.SetColumn(ResultsExpandPanel, isToolbarWide ? 4 : 3);
-        Grid.SetColumnSpan(ResultsExpandPanel, isToolbarWide ? 1 : 2);
-        ResultsExpandPanel.Margin = isToolbarWide ? new Thickness(0) : new Thickness(8, 0, 0, 0);
+        UpdateResultsDetailsLayout();
     }
 
     private void ApplyAppearance(AppearancePreference appearance)
@@ -842,12 +830,15 @@ public sealed partial class MainWindow : Window, IDisposable
         ResultsViewModel.PropertyChanged += OnResultsViewModelPropertyChanged;
         ResultsViewModel.SelectionRejected += OnResultsSelectionRejected;
         ResultsPage.DataContext = ResultsViewModel;
+        ResultsLocationComboBox.ItemsSource = ResultsViewModel.Locations;
+        ResultsLocationComboBox.SelectedIndex = 0;
         ResultsNavigationItem.IsEnabled = true;
         ResultGroupsText.Text = ResultsViewModel.DuplicateGroupCount.ToString(CultureInfo.CurrentCulture);
         ResultFilesText.Text = ResultsViewModel.VerifiedMemberCount.ToString(CultureInfo.CurrentCulture);
         ResultReclaimableText.Text = ResultDisplayFormatter.FormatBytes(ResultsViewModel.ReclaimableBytes);
         UpdateCandidateSummary();
         ResultSkippedText.Text = ResultsViewModel.SkippedItemCount.ToString(CultureInfo.CurrentCulture);
+        UpdateResultsPowerToolsState();
         ResultsEmptyTitle.Text = ResultsViewModel.HasResults ? Text("ResultsNoMatchesTitle") : Text("ResultsNoDuplicatesTitle");
         ResultsEmptyDescription.Text = ResultsViewModel.HasResults ? Text("ResultsNoMatchesDescription") : Text("ResultsNoDuplicatesDescription");
         UpdateResultsEmptyState();
@@ -868,11 +859,15 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         ResultsViewModel = null;
+        CancelResultsPreview();
         ResultsPage.DataContext = null;
         ResultsNavigationItem.IsEnabled = false;
         cleanupWorkflow.ResetForNewScan();
         ResultsStaleNotice.IsOpen = false;
         ResultsSelectionNotice.IsOpen = false;
+        ResultsPreviewImage.Source = null;
+        ResultsPreviewPlaceholder.Visibility = Visibility.Visible;
+        ResultsPreviewStatusText.Text = Text("ResultsPreviewEmpty");
     }
 
     private void OnResultsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
@@ -885,6 +880,13 @@ public sealed partial class MainWindow : Window, IDisposable
         if (args.PropertyName == nameof(ResultsReviewViewModel.HasVisibleGroups))
         {
             UpdateResultsEmptyState();
+        }
+
+        if (args.PropertyName is nameof(ResultsReviewViewModel.ActiveFilterCount)
+            or nameof(ResultsReviewViewModel.CanUndoSelectionAssistant)
+            or nameof(ResultsReviewViewModel.ActiveMember))
+        {
+            UpdateResultsPowerToolsState();
         }
     }
 
@@ -910,6 +912,38 @@ public sealed partial class MainWindow : Window, IDisposable
         UpdateResultsEmptyState();
     }
 
+    private void OnResultsTypeChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (ResultsViewModel is null || ResultsTypeComboBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
+        ResultsViewModel.FileTypeFilter = Enum.Parse<ResultFileTypeFilter>(tag, false);
+        UpdateResultsEmptyState();
+    }
+
+    private void OnResultsSizeChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (ResultsViewModel is null || ResultsSizeComboBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
+        ResultsViewModel.SizeFilter = Enum.Parse<ResultSizeFilter>(tag, false);
+        UpdateResultsEmptyState();
+    }
+
+    private void OnResultsLocationChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (ResultsViewModel is null || ResultsLocationComboBox.SelectedItem is not ResultLocationFilter location) return;
+        ResultsViewModel.LocationFilter = location.Id;
+        UpdateResultsEmptyState();
+    }
+
+    private void OnClearResultsFiltersClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel is null) return;
+        ResultsViewModel.ClearFilters();
+        ResultsSearchBox.Text = string.Empty;
+        ResultsTypeComboBox.SelectedIndex = 0;
+        ResultsSizeComboBox.SelectedIndex = 0;
+        ResultsLocationComboBox.SelectedIndex = 0;
+        UpdateResultsEmptyState();
+    }
+
     private void OnResultsSortChanged(object sender, SelectionChangedEventArgs args)
     {
         if (ResultsViewModel is null || ResultsSortComboBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
@@ -918,9 +952,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnResultsFilterChanged(object sender, SelectionChangedEventArgs args)
     {
-        if (ResultsViewModel is null || ResultsFilterComboBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
-        ResultsViewModel.FilterOption = Enum.Parse<ResultFilterOption>(tag, ignoreCase: false);
-        UpdateResultsEmptyState();
+        // Retained for compatibility with older view states; the power toolbar uses explicit type/size/location filters.
     }
 
     private void OnResultsDirectionClick(object sender, RoutedEventArgs args)
@@ -933,6 +965,206 @@ public sealed partial class MainWindow : Window, IDisposable
     private void OnExpandAllClick(object sender, RoutedEventArgs args) => ResultsViewModel?.ExpandAll();
 
     private void OnCollapseAllClick(object sender, RoutedEventArgs args) => ResultsViewModel?.CollapseAll();
+
+    private async void OnSelectionAssistantClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel is null) return;
+        var rulePicker = new ComboBox { MinWidth = 250, SelectedIndex = 0 };
+        rulePicker.Items.Add(new ComboBoxItem { Content = Text("SelectionRuleKeepNewest"), Tag = SelectionAssistantRule.KeepNewest });
+        rulePicker.Items.Add(new ComboBoxItem { Content = Text("SelectionRuleKeepOldest"), Tag = SelectionAssistantRule.KeepOldest });
+        rulePicker.Items.Add(new ComboBoxItem { Content = Text("SelectionRulePreferLocation"), Tag = SelectionAssistantRule.PreferLocation });
+        rulePicker.Items.Add(new ComboBoxItem { Content = Text("SelectionRuleOutsideLocation"), Tag = SelectionAssistantRule.SelectOutsideLocation });
+        var locationPicker = new ComboBox { MinWidth = 250, ItemsSource = ResultsViewModel.Locations.Where(location => !location.IsAll).ToArray(), DisplayMemberPath = nameof(ResultLocationFilter.DisplayName) };
+        locationPicker.SelectedIndex = 0;
+        var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(new TextBlock { Text = Text("SelectionAssistantScopeCurrent"), TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(rulePicker);
+        panel.Children.Add(locationPicker);
+        var chooseDialog = new ContentDialog
+        {
+            XamlRoot = ShellNavigation.XamlRoot,
+            Title = Text("SelectionAssistantTitle"),
+            Content = panel,
+            PrimaryButtonText = Text("SelectionAssistantPreviewButton"),
+            CloseButtonText = Text("SelectionAssistantCancelButton"),
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await chooseDialog.ShowAsync() != ContentDialogResult.Primary || isDisposed || rulePicker.SelectedItem is not ComboBoxItem { Tag: SelectionAssistantRule rule }) return;
+        string? location = (locationPicker.SelectedItem as ResultLocationFilter)?.Id;
+        SelectionAssistantProposal proposal = ResultsViewModel.CreateSelectionAssistantProposal(rule, location, currentFilteredResultsOnly: true);
+        var previewDialog = new ContentDialog
+        {
+            XamlRoot = ShellNavigation.XamlRoot,
+            Title = Text("SelectionAssistantPreviewTitle"),
+            Content = string.Format(CultureInfo.CurrentCulture, SelectionAssistantProposalFormat, proposal.SelectedCount, ResultDisplayFormatter.FormatBytes(proposal.SelectedBytes), proposal.AffectedGroupCount),
+            PrimaryButtonText = Text("SelectionAssistantApplyButton"),
+            CloseButtonText = Text("SelectionAssistantCancelButton"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await previewDialog.ShowAsync() == ContentDialogResult.Primary && ResultsViewModel.ApplySelectionAssistantProposal(proposal))
+        {
+            ResultsSelectionNotice.Message = string.Format(CultureInfo.CurrentCulture, SelectionAssistantAppliedFormat, proposal.SelectedCount);
+            ResultsSelectionNotice.Severity = InfoBarSeverity.Success;
+            ResultsSelectionNotice.IsOpen = true;
+            UpdateCandidateSummary();
+        }
+    }
+
+    private void OnUndoSelectionAssistantClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel?.UndoLastSelectionAssistant() == true) UpdateCandidateSummary();
+    }
+
+    private void OnClearSelectionsClick(object sender, RoutedEventArgs args)
+    {
+        ResultsViewModel?.ClearSelections();
+        UpdateCandidateSummary();
+    }
+
+    private async void OnExportResultsClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel is null) return;
+        var formatPicker = new ComboBox { MinWidth = 200, SelectedIndex = 0 };
+        formatPicker.Items.Add(new ComboBoxItem { Content = Text("ExportCsv"), Tag = "csv" });
+        formatPicker.Items.Add(new ComboBoxItem { Content = Text("ExportTxt"), Tag = "txt" });
+        var scopePicker = new ComboBox { MinWidth = 200, SelectedIndex = 0 };
+        scopePicker.Items.Add(new ComboBoxItem { Content = Text("ExportFilteredScope"), Tag = ResultReportScope.CurrentFilteredResults });
+        scopePicker.Items.Add(new ComboBoxItem { Content = Text("ExportAllScope"), Tag = ResultReportScope.AllResults });
+        var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(formatPicker);
+        panel.Children.Add(scopePicker);
+        var options = new ContentDialog { XamlRoot = ShellNavigation.XamlRoot, Title = Text("ExportResultsTitle"), Content = panel, PrimaryButtonText = Text("ExportChooseFileButton"), CloseButtonText = Text("SelectionAssistantCancelButton") };
+        if (await options.ShowAsync() != ContentDialogResult.Primary || isDisposed || formatPicker.SelectedItem is not ComboBoxItem { Tag: string extension } || scopePicker.SelectedItem is not ComboBoxItem { Tag: ResultReportScope scope }) return;
+        FileSavePicker picker = new();
+        picker.FileTypeChoices.Add(extension == "csv" ? "CSV" : "Text", ["." + extension]);
+        picker.SuggestedFileName = "Duplicate-file-report";
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        StorageFile? destination = await picker.PickSaveFileAsync();
+        if (destination is null || isDisposed) return;
+        string report = extension == "csv" ? ResultReportExporter.CreateCsv(ResultsViewModel, scope) : ResultReportExporter.CreateText(ResultsViewModel, scope);
+        try
+        {
+            await FileIO.WriteTextAsync(destination, report, Windows.Storage.Streams.UnicodeEncoding.Utf8);
+            ResultsSelectionNotice.Message = Text("ExportCompletedNotice");
+            ResultsSelectionNotice.Severity = InfoBarSeverity.Success;
+            ResultsSelectionNotice.IsOpen = true;
+        }
+        catch (Exception)
+        {
+            ResultsSelectionNotice.Message = Text("ExportFailedNotice");
+            ResultsSelectionNotice.Severity = InfoBarSeverity.Error;
+            ResultsSelectionNotice.IsOpen = true;
+        }
+    }
+
+    private void OnToggleDetailsClick(object sender, RoutedEventArgs args)
+    {
+        detailsPaneOpen = !detailsPaneOpen;
+        UpdateResultsDetailsLayout();
+    }
+
+    private void OnMemberDetailsClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel is null || sender is not FrameworkElement { Tag: ResultMemberViewModel member }) return;
+        ResultsViewModel.ActiveMember = member;
+        detailsPaneOpen = true;
+        UpdateResultsDetailsLayout();
+        _ = LoadPreviewAsync(member);
+    }
+
+    private void OnOpenFileClick(object sender, RoutedEventArgs args) => LaunchActiveMemberPath(openContainingFolder: false);
+
+    private void OnRevealFileClick(object sender, RoutedEventArgs args) => LaunchActiveMemberPath(openContainingFolder: true);
+
+    private void OnCopyPathClick(object sender, RoutedEventArgs args)
+    {
+        if (ResultsViewModel?.ActiveMember is not { } member) return;
+        var package = new DataPackage();
+        package.SetText(member.File.NormalizedPath);
+        Clipboard.SetContent(package);
+    }
+
+    private void LaunchActiveMemberPath(bool openContainingFolder)
+    {
+        if (ResultsViewModel?.ActiveMember is not { } member || !File.Exists(member.File.NormalizedPath))
+        {
+            ResultsSelectionNotice.Message = Text("FileActionUnavailableNotice");
+            ResultsSelectionNotice.Severity = InfoBarSeverity.Informational;
+            ResultsSelectionNotice.IsOpen = true;
+            return;
+        }
+
+        string fileName = member.File.NormalizedPath.Replace("\"", "\"\"");
+        try
+        {
+            Process.Start(new ProcessStartInfo(openContainingFolder ? "explorer.exe" : fileName, openContainingFolder ? $"/select,\"{fileName}\"" : string.Empty) { UseShellExecute = true });
+        }
+        catch (Exception)
+        {
+            ResultsSelectionNotice.Message = Text("FileActionUnavailableNotice");
+            ResultsSelectionNotice.Severity = InfoBarSeverity.Informational;
+            ResultsSelectionNotice.IsOpen = true;
+        }
+    }
+
+    private async Task LoadPreviewAsync(ResultMemberViewModel member)
+    {
+        CancelResultsPreview();
+        previewCancellation = new CancellationTokenSource();
+        CancellationToken cancellationToken = previewCancellation.Token;
+        ResultsPreviewImage.Source = null;
+        ResultsPreviewPlaceholder.Visibility = Visibility.Visible;
+        ResultsPreviewStatusText.Text = Text("ResultsPreviewLoading");
+        if (member.FileTypeFilter != ResultFileTypeFilter.Photos || !File.Exists(member.File.NormalizedPath))
+        {
+            ResultsPreviewStatusText.Text = Text("ResultsPreviewMetadataOnly");
+            return;
+        }
+
+        try
+        {
+            StorageFile file = await StorageFile.GetFileFromPathAsync(member.File.NormalizedPath).AsTask(cancellationToken);
+            using var stream = await file.OpenAsync(FileAccessMode.Read).AsTask(cancellationToken);
+            var image = new BitmapImage();
+            await image.SetSourceAsync(stream).AsTask(cancellationToken);
+            if (cancellationToken.IsCancellationRequested || !ReferenceEquals(ResultsViewModel?.ActiveMember, member)) return;
+            ResultsPreviewImage.Source = image;
+            ResultsPreviewPlaceholder.Visibility = Visibility.Collapsed;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            if (!cancellationToken.IsCancellationRequested) ResultsPreviewStatusText.Text = Text("ResultsPreviewUnavailable");
+        }
+    }
+
+    private void CancelResultsPreview()
+    {
+        previewCancellation?.Cancel();
+        previewCancellation?.Dispose();
+        previewCancellation = null;
+    }
+
+    private void UpdateResultsPowerToolsState()
+    {
+        if (ResultsViewModel is null) return;
+        ResultsActiveFiltersText.Text = ResultsViewModel.ActiveFilterCount == 0
+            ? Text("ResultsNoActiveFilters")
+            : string.Format(CultureInfo.CurrentCulture, ResultsActiveFiltersFormat, ResultsViewModel.ActiveFilterCount);
+        ClearResultsFiltersButton.IsEnabled = ResultsViewModel.HasActiveFilters;
+        UndoSelectionAssistantButton.IsEnabled = ResultsViewModel.CanUndoSelectionAssistant;
+    }
+
+    private void UpdateResultsDetailsLayout()
+    {
+        bool wide = PageHost.ActualWidth >= 1000;
+        ResultsDetailsPane.Visibility = detailsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
+        ResultsDetailsColumn.Width = detailsPaneOpen && wide ? new GridLength(340) : new GridLength(0);
+        Grid.SetColumn(ResultsDetailsPane, wide ? 1 : 0);
+        Grid.SetRow(ResultsDetailsPane, 0);
+        Grid.SetRowSpan(ResultsDetailsPane, 1);
+        Canvas.SetZIndex(ResultsDetailsPane, detailsPaneOpen && !wide ? 1 : 0);
+    }
 
     private void OnReviewCleanupClick(object sender, RoutedEventArgs args)
     {
@@ -1207,6 +1439,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         isDisposed = true;
+        CancelResultsPreview();
         PageHost.SizeChanged -= OnPageHostSizeChanged;
         activeScanGeneration++;
         elapsedTimer.Stop();

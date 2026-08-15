@@ -27,7 +27,8 @@ public sealed record ScanSessionProgress(
 
 public sealed record CompletedScanResult(
     DiscoveryResult Discovery,
-    ExactDuplicateDetectionResult Detection);
+    ExactDuplicateDetectionResult Detection,
+    IReadOnlyList<string>? ScanRoots = null);
 
 public sealed record ScanSessionResult(
     ScanSessionState State,

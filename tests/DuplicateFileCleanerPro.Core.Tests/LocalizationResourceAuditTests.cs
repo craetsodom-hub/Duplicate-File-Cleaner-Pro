@@ -17,6 +17,7 @@ public sealed class LocalizationResourceAuditTests
             "ScanProfileTitle.Text", "FileCriteriaTitle.Text", "ExclusionsTitle.Text",
             "ProfileAllFilesName", "ProfileLargeFilesName", "ProfilePhotosVideosName",
             "InvalidExtensionNotice", "InvalidSizeRangeNotice", "CriteriaSummaryFormat",
+            "SelectionAssistantTitle", "ExportResultsTitle", "DetailsPaneTitle", "ResultsPreviewUnavailable",
         })
         {
             StringAssert.Contains(resources, $"name=\"{key}\"");
@@ -27,6 +28,7 @@ public sealed class LocalizationResourceAuditTests
             "SettingsAppearanceTitle", "SettingsPrivacyTitle", "SettingsSafetyTitle", "SettingsAboutTitle",
             "ScanProfileTitle", "FileCriteriaTitle", "ExclusionsTitle", "ProfileComboBox",
             "IncludeSubfoldersToggle", "CustomExtensionTextBox", "ExcludedExtensionTextBox",
+            "ResultsTypeComboBox", "ResultsSizeComboBox", "ResultsLocationComboBox", "DetailsToggleButton",
         })
         {
             StringAssert.Contains(xaml, $"x:Uid=\"{uid}\"");

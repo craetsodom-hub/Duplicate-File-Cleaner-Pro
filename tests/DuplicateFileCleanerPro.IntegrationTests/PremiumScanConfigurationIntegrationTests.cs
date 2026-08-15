@@ -99,7 +99,7 @@ public sealed class PremiumScanConfigurationIntegrationTests
     {
         using Phase14Corpus corpus = new();
         var policy = new DiscoveryPolicy(
-            Criteria: new ScanCriteria(ScanFileType.All, minimumSizeBytes: 40, maximumSizeBytes: 42));
+            Criteria: new ScanCriteria(ScanFileType.All, minimumSizeBytes: 43, maximumSizeBytes: 43));
 
         ScanSessionResult result = await RunAsync(corpus, policy);
 
