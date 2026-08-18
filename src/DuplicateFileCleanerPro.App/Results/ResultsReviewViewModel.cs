@@ -391,7 +391,7 @@ public sealed class ResultsReviewViewModel : INotifyPropertyChanged
         };
     }
 
-    private void NotifySelectionStateChanged()
+    internal void NotifySelectionStateChanged()
     {
         OnPropertyChanged(nameof(SelectedCandidateCount));
         OnPropertyChanged(nameof(SelectedCandidateBytes));
@@ -574,7 +574,14 @@ public sealed class ResultMemberViewModel : INotifyPropertyChanged
         return true;
     }
 
-    internal void NotifySelectionRejected() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+    internal void NotifySelectionRejected()
+    {
+        // Binding may have optimistically toggled the checkbox before the setter rejected it.
+        // Re-announce every dependent presentation value from the authoritative model.
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+        Group.NotifySelectionChanged();
+        Group.Owner.NotifySelectionStateChanged();
+    }
 }
 
 /// <summary>Immutable intent handoff for a future cleanup phase. It grants no authority to mutate files.</summary>

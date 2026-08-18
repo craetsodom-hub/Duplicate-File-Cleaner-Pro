@@ -76,6 +76,58 @@ public sealed class ResultsReviewViewModelTests
     }
 
     [TestMethod]
+    public void RejectedFinalSelectionReannouncesAuthoritativeStateForTwoAndThreeMemberGroups()
+    {
+        var viewModel = new ResultsReviewViewModel(Result([
+            Group(20, ("two-a.bin", 10, 1), ("two-b.bin", 10, 2)),
+            Group(30, ("three-a.bin", 11, 3), ("three-b.bin", 12, 4), ("three-c.bin", 13, 5))]));
+        int rootNotifications = 0;
+        int groupNotifications = 0;
+        viewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is nameof(ResultsReviewViewModel.SelectedCandidateCount)
+                or nameof(ResultsReviewViewModel.SelectedCandidateBytes)) rootNotifications++;
+        };
+        viewModel.AllGroups[0].PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is nameof(ResultGroupViewModel.SelectedCandidateCount)
+                or nameof(ResultGroupViewModel.SelectedCandidateBytes)) groupNotifications++;
+        };
+
+        ResultGroupViewModel two = viewModel.AllGroups[0];
+        two.Members[0].IsSelected = true;
+        int selectedBeforeTwo = viewModel.SelectedCandidateCount;
+        long bytesBeforeTwo = viewModel.SelectedCandidateBytes;
+        two.Members[1].IsSelected = true;
+
+        Assert.IsFalse(two.Members[1].IsSelected);
+        Assert.AreEqual(selectedBeforeTwo, viewModel.SelectedCandidateCount);
+        Assert.AreEqual(bytesBeforeTwo, viewModel.SelectedCandidateBytes);
+        Assert.AreEqual(1, two.SelectedCandidateCount);
+
+        ResultGroupViewModel three = viewModel.AllGroups[1];
+        three.Members[0].IsSelected = true;
+        three.Members[1].IsSelected = true;
+        int selectedBeforeThree = viewModel.SelectedCandidateCount;
+        long bytesBeforeThree = viewModel.SelectedCandidateBytes;
+        three.Members[2].IsSelected = true;
+
+        Assert.IsFalse(three.Members[2].IsSelected);
+        Assert.AreEqual(selectedBeforeThree, viewModel.SelectedCandidateCount);
+        Assert.AreEqual(bytesBeforeThree, viewModel.SelectedCandidateBytes);
+        Assert.AreEqual(2, three.SelectedCandidateCount);
+        Assert.IsGreaterThan(0, rootNotifications);
+        Assert.IsGreaterThan(0, groupNotifications);
+
+        viewModel.SearchText = "three";
+        viewModel.SearchText = string.Empty;
+        three.IsExpanded = true;
+        three.IsExpanded = false;
+        three.IsExpanded = true;
+        Assert.IsFalse(three.Members[2].IsSelected);
+    }
+
+    [TestMethod]
     public void SelectionSurvivesSearchSortingFilteringAndExpansionWithoutMutatingSnapshot()
     {
         CompletedScanResult snapshot = Result([
