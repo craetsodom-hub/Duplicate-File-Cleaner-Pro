@@ -190,7 +190,9 @@ public sealed partial class MainWindow : Window, IDisposable
         Grid.SetColumn(ScanReviewSurface, isWide ? 1 : 0);
         ScanReviewSurface.Margin = new Thickness(0);
 
-        bool similarWide = args.NewSize.Width >= 980;
+        // Keep the comparison pane available at the normal desktop width; the
+        // shell only enters its compact layout below 760 effective pixels.
+        bool similarWide = args.NewSize.Width >= 760;
         SimilarDetailColumn.Width = similarWide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         SimilarDetailPane.Visibility = similarWide ? Visibility.Visible : Visibility.Collapsed;
 
