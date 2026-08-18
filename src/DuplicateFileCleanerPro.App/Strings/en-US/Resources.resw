@@ -291,4 +291,40 @@
   <data name="SimilarRemovalConfirmPrimary" xml:space="preserve"><value>Move selected photos to Recycle Bin</value></data><data name="SimilarRemovalConfirmCancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="SimilarRemovalMarkedFormat" xml:space="preserve"><value>{0} marked for removal</value></data><data name="SimilarRemovalProgressFormat" xml:space="preserve"><value>Moving {0} of {1} photos to Recycle Bin</value></data><data name="SimilarRemovalCompletionFormat" xml:space="preserve"><value>{0} photos moved to Recycle Bin · {1} skipped · {2} failed</value></data>
   <data name="SimilarRemovalOutcomeMoved" xml:space="preserve"><value>Moved to Recycle Bin</value></data><data name="SimilarRemovalOutcomeMissing" xml:space="preserve"><value>Skipped — missing</value></data><data name="SimilarRemovalOutcomeChanged" xml:space="preserve"><value>Skipped — changed</value></data><data name="SimilarRemovalOutcomeSurvivor" xml:space="preserve"><value>Skipped — remaining photo unavailable</value></data><data name="SimilarRemovalOutcomePolicy" xml:space="preserve"><value>Skipped — safety policy</value></data><data name="SimilarRemovalOutcomeCancelled" xml:space="preserve"><value>Cancelled</value></data><data name="SimilarRemovalOutcomeRecycleBin" xml:space="preserve"><value>Failed — Recycle Bin</value></data><data name="SimilarRemovalOutcomePlatform" xml:space="preserve"><value>Failed — filesystem operation</value></data>
+  <data name="ExactModeComboBox.AutomationProperties.Name" xml:space="preserve"><value>Exact duplicate mode</value></data>
+  <data name="ExactModeFiles.Content" xml:space="preserve"><value>Files</value></data>
+  <data name="ExactModeFolders.Content" xml:space="preserve"><value>Folders</value></data>
+  <data name="ExactModeCompare.Content" xml:space="preserve"><value>Compare folders</value></data>
+  <data name="DuplicateFoldersTitle.Text" xml:space="preserve"><value>Duplicate folders</value></data>
+  <data name="DuplicateFoldersDescription.Text" xml:space="preserve"><value>Find folders whose current eligible recursive file trees are exact, byte-verified copies. Folder names and directory metadata do not prove equivalence.</value></data>
+  <data name="AddDuplicateFolderRootButton.Content" xml:space="preserve"><value>Add folder</value></data>
+  <data name="RemoveFolderIntelligenceRootButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="StartDuplicateFoldersButton.Content" xml:space="preserve"><value>Analyze folders</value></data>
+  <data name="DuplicateFolderResultsTitle.Text" xml:space="preserve"><value>Duplicate folder results</value></data>
+  <data name="DuplicateFolderResultsDescription.Text" xml:space="preserve"><value>These groups are exact within the current eligible file criteria. No folder deletion is available.</value></data>
+  <data name="DuplicateFolderScanAgainButton.Content" xml:space="preserve"><value>Scan again</value></data>
+  <data name="FolderSearchBox.PlaceholderText" xml:space="preserve"><value>Search folder paths</value></data>
+  <data name="ExportDuplicateFoldersButton.Content" xml:space="preserve"><value>Export</value></data>
+  <data name="ExportDuplicateFoldersTxtButton.Content" xml:space="preserve"><value>TXT</value></data>
+  <data name="CompareFoldersTitle.Text" xml:space="preserve"><value>Compare folders</value></data>
+  <data name="CompareFoldersDescription.Text" xml:space="preserve"><value>Choose a Master folder as your reference, then inspect one or more local folders. The Master is not treated as newer or authoritative.</value></data>
+  <data name="MasterFolderLabel.Text" xml:space="preserve"><value>Master folder</value></data>
+  <data name="ChooseMasterFolderButton.Content" xml:space="preserve"><value>Choose Master</value></data>
+  <data name="CompareTargetFoldersLabel.Text" xml:space="preserve"><value>Folders to compare</value></data>
+  <data name="AddCompareTargetButton.Content" xml:space="preserve"><value>Add target</value></data>
+  <data name="RemoveCompareTargetButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="StartCompareFoldersButton.Content" xml:space="preserve"><value>Compare folders</value></data>
+  <data name="DuplicateFolderResultsTitle.AutomationProperties.Name" xml:space="preserve"><value>Verified duplicate folder results</value></data>
+  <data name="CompareFoldersResultsTitle.Text" xml:space="preserve"><value>Folder comparison</value></data>
+  <data name="CompareFoldersResultsDescription.Text" xml:space="preserve"><value>Inspection only: matching paths, changed content, unique files, and exact content found elsewhere.</value></data>
+  <data name="CompareFoldersScanAgainButton.Content" xml:space="preserve"><value>Compare again</value></data>
+  <data name="CompareTargetComboBox.AutomationProperties.Name" xml:space="preserve"><value>Comparison target</value></data>
+  <data name="CompareStatusComboBox.AutomationProperties.Name" xml:space="preserve"><value>Comparison status filter</value></data>
+  <data name="CompareSearchBox.PlaceholderText" xml:space="preserve"><value>Search relative paths</value></data>
+  <data name="ExportFolderComparisonButton.Content" xml:space="preserve"><value>Export</value></data>
+  <data name="ExportFolderComparisonTxtButton.Content" xml:space="preserve"><value>TXT</value></data>
+  <data name="FolderComparisonDetailsTitle.Text" xml:space="preserve"><value>Comparison details</value></data>
+  <data name="OpenFolderComparisonFileButton.Content" xml:space="preserve"><value>Open</value></data>
+  <data name="RevealFolderComparisonFileButton.Content" xml:space="preserve"><value>Reveal</value></data>
+  <data name="CopyFolderComparisonPathButton.Content" xml:space="preserve"><value>Copy path</value></data>
 </root>

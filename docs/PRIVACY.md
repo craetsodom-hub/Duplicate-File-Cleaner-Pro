@@ -6,6 +6,10 @@ The current product has no telemetry, analytics, account, cloud processing, scan
 
 Cleanup is a local Windows Recycle Bin operation. This document describes current engineering behavior and is not a legal privacy-policy page.
 
+## Folder Intelligence
+
+Duplicate Folder analysis and Master Folder comparison run locally over the selected eligible file trees. Folder comparison results, verified hashes, moved/renamed relationships, selected roots, and comparison history are session-only and are not saved. Folder workflows do not contact a network service and do not synchronize, copy, overwrite, rename, move, or delete folders.
+
 ## Similar Photos
 
 Similar Photos analyzes eligible images locally. It creates bounded image decodes and visual fingerprints in memory for the active analysis only; it does not upload photos, build a persistent image index, retain thumbnails, save similarity groups, keep review marks, removed paths, removal outcomes, or store photo history. The only Similar Photos preference retained locally is the default sensitivity. A photo is eligible for removal only after an explicit session-only `Consider removing` mark, dedicated review, identity revalidation, and confirmation; the operation uses the local Windows Recycle Bin and is not retained as app history.

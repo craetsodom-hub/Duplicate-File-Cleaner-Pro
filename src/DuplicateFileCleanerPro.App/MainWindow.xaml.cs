@@ -35,6 +35,7 @@ using DuplicateFileCleanerPro.Infrastructure.Windows.Similarity;
 using DuplicateFileCleanerPro.App.SimilarPhotos;
 using DuplicateFileCleanerPro.Core.SimilarRemoval;
 using DuplicateFileCleanerPro.Infrastructure.Windows.SimilarRemoval;
+using DuplicateFileCleanerPro.Core.FolderIntelligence;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -81,6 +82,15 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly WindowsThumbnailService similarThumbnails = new();
     private readonly CleanupWorkflowViewModel cleanupWorkflow;
     private readonly SimilarPhotoRemovalWorkflowViewModel similarRemovalWorkflow;
+    private readonly FolderIntelligenceService folderIntelligence;
+    private readonly ObservableCollection<string> duplicateFolderRoots = [];
+    private readonly ObservableCollection<string> compareTargetFolders = [];
+    private readonly ObservableCollection<FolderResultRow> duplicateFolderRows = [];
+    private CancellationTokenSource? folderIntelligenceCancellation;
+    private DuplicateFolderScanResult? duplicateFolderResult;
+    private MasterFolderComparisonResult? masterComparisonResult;
+    private FolderComparisonTargetResult? activeComparisonTarget;
+    private string? masterFolderRoot;
     private readonly SettingsViewModel settingsViewModel;
     private readonly AppSettingsService appSettings;
     private readonly Stopwatch scanStopwatch = new();
@@ -113,6 +123,9 @@ public sealed partial class MainWindow : Window, IDisposable
             new CleanupEngine(new WindowsCleanupPlatformService(), safetyOperations));
         similarRemovalWorkflow = new SimilarPhotoRemovalWorkflowViewModel(
             new SimilarPhotoRemovalEngine(new WindowsSimilarPhotoRemovalPlatform(), safetyOperations));
+        folderIntelligence = new FolderIntelligenceService(
+            new WindowsFileDiscoveryService(),
+            new WindowsContentAnalysisService());
         settingsViewModel = new SettingsViewModel(settings, ApplyAppearance);
         isApplyingSetup = true;
         InitializeComponent();
@@ -125,6 +138,9 @@ public sealed partial class MainWindow : Window, IDisposable
         ExcludedFoldersList.ItemsSource = excludedFolders;
         ExcludedExtensionsList.ItemsSource = excludedExtensions;
         ProfileComboBox.ItemsSource = profileChoices;
+        DuplicateFolderRootsList.ItemsSource = duplicateFolderRoots;
+        CompareTargetFoldersList.ItemsSource = compareTargetFolders;
+        DuplicateFolderResultsList.ItemsSource = duplicateFolderRows;
         PageHost.SizeChanged += OnPageHostSizeChanged;
         _windowProcedure = WindowProcedure;
         ConfigureMinimumWindowSize();
@@ -148,7 +164,14 @@ public sealed partial class MainWindow : Window, IDisposable
         Closed += OnClosed;
         LoadPersistedScanSetup();
         LoadSimilarPhotosPreference();
+        CompareStatusComboBox.Items.Add(new ComboBoxItem { Content = "All", Tag = "All" });
+        foreach (FolderComparisonStatus status in Enum.GetValues<FolderComparisonStatus>())
+        {
+            CompareStatusComboBox.Items.Add(new ComboBoxItem { Content = status.ToString(), Tag = status });
+        }
+        CompareStatusComboBox.SelectedIndex = 0;
         UpdateSetupState();
+        ApplyExactModeVisibility();
     }
 
     private void ConfigureMinimumWindowSize()
@@ -273,6 +296,39 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             ScanPage.Visibility = Visibility.Collapsed;
             ScanningPage.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void OnExactModeSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        ApplyExactModeVisibility();
+    }
+
+    private string ExactMode => (ExactModeComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "Files";
+
+    private void ApplyExactModeVisibility()
+    {
+        if (DuplicateFoldersSetupPanel is null || CompareFoldersSetupPanel is null || ScanProfileSurface is null)
+        {
+            return;
+        }
+
+        bool files = ExactMode == "Files";
+        bool folders = ExactMode == "Folders";
+        bool compare = ExactMode == "Compare";
+        DuplicateFoldersSetupPanel.Visibility = folders && duplicateFolderResult is null ? Visibility.Visible : Visibility.Collapsed;
+        CompareFoldersSetupPanel.Visibility = compare && masterComparisonResult is null ? Visibility.Visible : Visibility.Collapsed;
+        DuplicateFolderResultsPanel.Visibility = folders && duplicateFolderResult is not null ? Visibility.Visible : Visibility.Collapsed;
+        CompareFoldersResultsPanel.Visibility = compare && masterComparisonResult is not null ? Visibility.Visible : Visibility.Collapsed;
+        ScanProfileSurface.Visibility = files ? Visibility.Visible : Visibility.Collapsed;
+        ScanWorkspaceGrid.Visibility = files ? Visibility.Visible : Visibility.Collapsed;
+        ScanLocationsSurface.Visibility = files ? Visibility.Visible : Visibility.Collapsed;
+        ScanReviewSurface.Visibility = files ? Visibility.Visible : Visibility.Collapsed;
+        ExclusionsSurface.Visibility = files ? Visibility.Visible : Visibility.Collapsed;
+        StartScanButton.Visibility = files ? Visibility.Visible : Visibility.Collapsed;
+        if (!files)
+        {
+            ScanSetupNotice.IsOpen = false;
         }
     }
 
@@ -756,6 +812,333 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
+    private async Task<string?> PickFolderPathAsync()
+    {
+        FolderPicker picker = new();
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        StorageFolder? folder = await picker.PickSingleFolderAsync();
+        return folder?.Path;
+    }
+
+    private async void OnAddDuplicateFolderRootClick(object sender, RoutedEventArgs args)
+    {
+        string? path = await PickFolderPathAsync();
+        if (path is null) return;
+        try
+        {
+            string normalized = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!duplicateFolderRoots.Contains(normalized, StringComparer.OrdinalIgnoreCase)) duplicateFolderRoots.Add(normalized);
+        }
+        catch (ArgumentException)
+        {
+            FolderIntelligenceNotice.Message = "The selected folder is not a valid local folder.";
+            FolderIntelligenceNotice.Severity = InfoBarSeverity.Warning;
+            FolderIntelligenceNotice.IsOpen = true;
+        }
+    }
+
+    private void OnRemoveDuplicateFolderRootClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is FrameworkElement { Tag: string path }) duplicateFolderRoots.Remove(path);
+    }
+
+    private async void OnChooseMasterFolderClick(object sender, RoutedEventArgs args)
+    {
+        string? path = await PickFolderPathAsync();
+        if (path is null) return;
+        masterFolderRoot = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        MasterFolderPathText.Text = masterFolderRoot;
+    }
+
+    private async void OnAddCompareTargetClick(object sender, RoutedEventArgs args)
+    {
+        string? path = await PickFolderPathAsync();
+        if (path is null) return;
+        string normalized = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!compareTargetFolders.Contains(normalized, StringComparer.OrdinalIgnoreCase)) compareTargetFolders.Add(normalized);
+    }
+
+    private void OnRemoveCompareTargetClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is FrameworkElement { Tag: string path }) compareTargetFolders.Remove(path);
+    }
+
+    private DiscoveryPolicy FolderAnalysisPolicy() => new(
+        IncludeHiddenFiles: false,
+        IncludeSystemFiles: false,
+        IncludeEncryptedFiles: false,
+        IncludeSubfolders: true,
+        Criteria: ScanCriteria.AllFiles,
+        ExcludedFolders: excludedFolders,
+        ExcludedExtensions: excludedExtensions);
+
+    private async void OnStartDuplicateFoldersClick(object sender, RoutedEventArgs args)
+    {
+        if (duplicateFolderRoots.Count < 2 || folderIntelligenceCancellation is not null)
+        {
+            FolderIntelligenceNotice.Message = "Choose at least two local folders to find exact duplicate trees.";
+            FolderIntelligenceNotice.Severity = InfoBarSeverity.Warning;
+            FolderIntelligenceNotice.IsOpen = true;
+            return;
+        }
+
+        duplicateFolderResult = null;
+        masterComparisonResult = null;
+        folderIntelligenceCancellation = new CancellationTokenSource();
+        ScanPage.Visibility = Visibility.Collapsed;
+        ScanningPage.Visibility = Visibility.Visible;
+        ScanStageTitle.Text = "Building duplicate folder groups";
+        ScanProgressBar.IsIndeterminate = true;
+        ShellNavigation.IsPaneToggleButtonVisible = false;
+        try
+        {
+            var progress = new Progress<FolderIntelligenceProgress>(UpdateFolderIntelligenceProgress);
+            duplicateFolderResult = await folderIntelligence.FindDuplicateFoldersAsync(duplicateFolderRoots, FolderAnalysisPolicy(), progress, folderIntelligenceCancellation.Token);
+            if (!isDisposed && !duplicateFolderResult.WasCancelled) ShowDuplicateFolderResults(duplicateFolderResult);
+        }
+        finally
+        {
+            ScanningPage.Visibility = Visibility.Collapsed;
+            ShellNavigation.IsPaneToggleButtonVisible = true;
+            folderIntelligenceCancellation.Dispose();
+            folderIntelligenceCancellation = null;
+            if (!isDisposed && (duplicateFolderResult is null || duplicateFolderResult.WasCancelled))
+            {
+                ScanPage.Visibility = Visibility.Visible;
+                ApplyExactModeVisibility();
+            }
+        }
+    }
+
+    private async void OnStartCompareFoldersClick(object sender, RoutedEventArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(masterFolderRoot) || compareTargetFolders.Count == 0 || folderIntelligenceCancellation is not null)
+        {
+            CompareFoldersNotice.Message = "Choose one Master folder and at least one local comparison folder.";
+            CompareFoldersNotice.Severity = InfoBarSeverity.Warning;
+            CompareFoldersNotice.IsOpen = true;
+            return;
+        }
+
+        duplicateFolderResult = null;
+        masterComparisonResult = null;
+        folderIntelligenceCancellation = new CancellationTokenSource();
+        ScanPage.Visibility = Visibility.Collapsed;
+        ScanningPage.Visibility = Visibility.Visible;
+        ScanStageTitle.Text = "Comparing folders";
+        ScanProgressBar.IsIndeterminate = true;
+        ShellNavigation.IsPaneToggleButtonVisible = false;
+        try
+        {
+            var progress = new Progress<FolderIntelligenceProgress>(UpdateFolderIntelligenceProgress);
+            masterComparisonResult = await folderIntelligence.CompareMasterFolderAsync(masterFolderRoot, compareTargetFolders, FolderAnalysisPolicy(), progress, folderIntelligenceCancellation.Token);
+            if (!isDisposed && !masterComparisonResult.WasCancelled) ShowMasterComparisonResults(masterComparisonResult);
+        }
+        finally
+        {
+            ScanningPage.Visibility = Visibility.Collapsed;
+            ShellNavigation.IsPaneToggleButtonVisible = true;
+            folderIntelligenceCancellation.Dispose();
+            folderIntelligenceCancellation = null;
+            if (!isDisposed && (masterComparisonResult is null || masterComparisonResult.WasCancelled))
+            {
+                ScanPage.Visibility = Visibility.Visible;
+                ApplyExactModeVisibility();
+            }
+        }
+    }
+
+    private void UpdateFolderIntelligenceProgress(FolderIntelligenceProgress progress)
+    {
+        ScanStageTitle.Text = progress.Stage.ToString();
+        CurrentActivityText.Text = string.IsNullOrWhiteSpace(progress.CurrentPath) ? "Processing selected local folders" : progress.CurrentPath;
+        FilesMetricText.Text = progress.ItemsProcessed.ToString(CultureInfo.CurrentCulture);
+        AnalyzedMetricText.Text = progress.TotalItems.ToString(CultureInfo.CurrentCulture);
+        GroupsMetricText.Text = progress.ResultCount.ToString(CultureInfo.CurrentCulture);
+    }
+
+    private void ShowDuplicateFolderResults(DuplicateFolderScanResult result)
+    {
+        duplicateFolderRows.Clear();
+        for (int index = 0; index < result.Groups.Count; index++)
+        {
+            VerifiedDuplicateFolderGroup group = result.Groups[index];
+            foreach (FolderTreeSnapshot folder in group.MemberFolders)
+            {
+                duplicateFolderRows.Add(new FolderResultRow(
+                    index + 1,
+                    folder.RootPath,
+                    folder.LogicalFileCount,
+                    ResultDisplayFormatter.FormatBytes(folder.TotalLogicalBytes),
+                    folder.IndependentPhysicalFileCount,
+                    ResultDisplayFormatter.FormatBytes(group.PotentialReclaimableBytes))
+                {
+                    TotalLogicalBytesValue = folder.TotalLogicalBytes,
+                    PotentialReclaimableBytesValue = group.PotentialReclaimableBytes,
+                });
+            }
+        }
+
+        DuplicateFolderMetricsText.Text = $"{result.Groups.Count} groups · {duplicateFolderRows.Count} folder copies · {result.SkippedItems.Count} skipped · current eligible file criteria";
+        DuplicateFolderSearchBox.Text = string.Empty;
+        ApplyDuplicateFolderFilter();
+        ScanPage.Visibility = Visibility.Visible;
+        ApplyExactModeVisibility();
+    }
+
+    private void ApplyDuplicateFolderFilter()
+    {
+        if (DuplicateFolderResultsList is null || DuplicateFolderSearchBox is null)
+        {
+            return;
+        }
+
+        string query = DuplicateFolderSearchBox?.Text?.Trim() ?? string.Empty;
+        int minimumFiles = int.TryParse((DuplicateFolderMinFilesComboBox?.SelectedItem as ComboBoxItem)?.Tag as string, out int parsedMinimum) ? parsedMinimum : 0;
+        string sort = (DuplicateFolderSortComboBox?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Reclaimable";
+        IEnumerable<FolderResultRow> rows = duplicateFolderRows.Where(row => row.LogicalFileCount >= minimumFiles && (string.IsNullOrWhiteSpace(query) || row.RootPath.Contains(query, StringComparison.OrdinalIgnoreCase)));
+        rows = sort switch
+        {
+            "Size" => rows.OrderByDescending(row => row.TotalLogicalBytesValue).ThenBy(row => row.RootPath, StringComparer.Ordinal),
+            "Count" => rows.OrderByDescending(row => row.LogicalFileCount).ThenBy(row => row.RootPath, StringComparer.Ordinal),
+            "Path" => rows.OrderBy(row => row.RootPath, StringComparer.Ordinal),
+            _ => rows.OrderByDescending(row => row.PotentialReclaimableBytesValue).ThenBy(row => row.RootPath, StringComparer.Ordinal),
+        };
+        DuplicateFolderResultsList.ItemsSource = rows.ToArray();
+    }
+
+    private void OnDuplicateFolderSearchChanged(object sender, TextChangedEventArgs args) => ApplyDuplicateFolderFilter();
+    private void OnDuplicateFolderFilterChanged(object sender, SelectionChangedEventArgs args) => ApplyDuplicateFolderFilter();
+    private void OnDuplicateFolderScanAgainClick(object sender, RoutedEventArgs args)
+    {
+        duplicateFolderResult = null;
+        ApplyExactModeVisibility();
+    }
+
+    private void ShowMasterComparisonResults(MasterFolderComparisonResult result)
+    {
+        CompareTargetComboBox.ItemsSource = result.Targets.Select(target => target.TargetRoot).ToArray();
+        CompareTargetComboBox.SelectedIndex = result.Targets.Count > 0 ? 0 : -1;
+        masterComparisonResult = result;
+        ScanPage.Visibility = Visibility.Visible;
+        ApplyExactModeVisibility();
+        UpdateActiveComparisonTarget();
+    }
+
+    private void OnCompareTargetSelectionChanged(object sender, SelectionChangedEventArgs args) => UpdateActiveComparisonTarget();
+    private void OnCompareStatusSelectionChanged(object sender, SelectionChangedEventArgs args) => UpdateActiveComparisonRows();
+    private void OnCompareSearchChanged(object sender, TextChangedEventArgs args) => UpdateActiveComparisonRows();
+
+    private void UpdateActiveComparisonTarget()
+    {
+        string? root = CompareTargetComboBox.SelectedItem as string;
+        activeComparisonTarget = masterComparisonResult?.Targets.FirstOrDefault(target => target.TargetRoot.Equals(root, StringComparison.OrdinalIgnoreCase));
+        UpdateActiveComparisonRows();
+    }
+
+    private void UpdateActiveComparisonRows()
+    {
+        if (activeComparisonTarget is null)
+        {
+            CompareRowsList.ItemsSource = null;
+            CompareSummaryText.Text = string.Empty;
+            return;
+        }
+
+        FolderComparisonStatus? status = CompareStatusComboBox.SelectedItem is ComboBoxItem { Tag: FolderComparisonStatus selected } ? selected : null;
+        string query = CompareSearchBox?.Text?.Trim() ?? string.Empty;
+        CompareRowsList.ItemsSource = activeComparisonTarget.Rows.Where(row => (status is null || row.Status == status) && (string.IsNullOrWhiteSpace(query) || row.RelativePath.Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
+        FolderComparisonSummary summary = activeComparisonTarget.Summary;
+        CompareSummaryText.Text = $"Master {summary.MasterFiles} · Target {summary.ComparedFiles} · Identical {summary.Identical} · Different {summary.Different} · Only Master {summary.OnlyInMaster} · Only Target {summary.OnlyInCompared} · Moved/Renamed {summary.MovedRenamedExactMatches}";
+    }
+
+    private FolderComparisonRow? activeComparisonRow;
+    private void OnCompareRowSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        activeComparisonRow = CompareRowsList.SelectedItem as FolderComparisonRow;
+        CompareDetailsStatusText.Text = activeComparisonRow?.Status.ToString() ?? string.Empty;
+        CompareDetailsMasterText.Text = activeComparisonRow?.MasterFile is { } master ? $"Master: {master.File.NormalizedPath} · {master.File.Length:N0} bytes · {master.File.LastWriteTimeUtc.LocalDateTime:g}" : "Master: not present";
+        CompareDetailsTargetText.Text = activeComparisonRow is { } row && row.ComparedFiles.Count > 0 ? $"Compared: {string.Join(" | ", row.ComparedFiles.Select(file => file.File.NormalizedPath))}" : "Compared: not present";
+    }
+
+    private void OnCompareFoldersScanAgainClick(object sender, RoutedEventArgs args)
+    {
+        masterComparisonResult = null;
+        activeComparisonTarget = null;
+        ApplyExactModeVisibility();
+    }
+
+    private async void OnExportDuplicateFoldersClick(object sender, RoutedEventArgs args)
+    {
+        if (duplicateFolderResult is null) return;
+        await SaveFolderReportAsync("Duplicate-folder-report", FolderIntelligenceExporter.CreateDuplicateFolderCsv(duplicateFolderResult), "csv", FolderIntelligenceNotice);
+    }
+
+    private async void OnExportDuplicateFoldersTxtClick(object sender, RoutedEventArgs args)
+    {
+        if (duplicateFolderResult is null) return;
+        await SaveFolderReportAsync("Duplicate-folder-report", FolderIntelligenceExporter.CreateDuplicateFolderText(duplicateFolderResult), "txt", FolderIntelligenceNotice);
+    }
+
+    private async void OnExportFolderComparisonClick(object sender, RoutedEventArgs args)
+    {
+        if (activeComparisonTarget is null) return;
+        await SaveFolderReportAsync("Folder-comparison-report", FolderIntelligenceExporter.CreateComparisonCsv(activeComparisonTarget), "csv", CompareFoldersNotice);
+    }
+
+    private async void OnExportFolderComparisonTxtClick(object sender, RoutedEventArgs args)
+    {
+        if (activeComparisonTarget is null) return;
+        await SaveFolderReportAsync("Folder-comparison-report", FolderIntelligenceExporter.CreateComparisonText(activeComparisonTarget), "txt", CompareFoldersNotice);
+    }
+
+    private async Task SaveFolderReportAsync(string suggestedFileName, string report, string extension, InfoBar notice)
+    {
+        FileSavePicker picker = new();
+        picker.FileTypeChoices.Add(extension.Equals("csv", StringComparison.OrdinalIgnoreCase) ? "CSV" : "Text", ["." + extension]);
+        picker.SuggestedFileName = suggestedFileName;
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        StorageFile? destination = await picker.PickSaveFileAsync();
+        if (destination is null) return;
+        try
+        {
+            await FileIO.WriteTextAsync(destination, report, Windows.Storage.Streams.UnicodeEncoding.Utf8);
+            notice.Message = "Report exported locally. No export history was saved.";
+            notice.Severity = InfoBarSeverity.Success;
+        }
+        catch (Exception)
+        {
+            notice.Message = "The report could not be exported.";
+            notice.Severity = InfoBarSeverity.Error;
+        }
+
+        notice.IsOpen = true;
+    }
+
+    private string? ActiveComparisonActionPath => activeComparisonRow?.MasterFile?.File.NormalizedPath ?? (activeComparisonRow is { ComparedFiles.Count: > 0 } row ? row.ComparedFiles[0].File.NormalizedPath : null);
+
+    private async void OnOpenFolderComparisonFileClick(object sender, RoutedEventArgs args)
+    {
+        string? path = ActiveComparisonActionPath;
+        if (path is not null && File.Exists(path)) await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(path));
+    }
+
+    private async void OnRevealFolderComparisonFileClick(object sender, RoutedEventArgs args)
+    {
+        string? path = ActiveComparisonActionPath;
+        if (path is not null && File.Exists(path)) await Windows.System.Launcher.LaunchFolderPathAsync(Path.GetDirectoryName(path));
+    }
+
+    private void OnCopyFolderComparisonPathClick(object sender, RoutedEventArgs args)
+    {
+        string? path = ActiveComparisonActionPath;
+        if (path is null) return;
+        DataPackage package = new() { RequestedOperation = DataPackageOperation.Copy };
+        package.SetText(path);
+        Clipboard.SetContent(package);
+    }
+
     private async void OnStartScanClick(object sender, RoutedEventArgs args)
     {
         if (selectedRoots.Count == 0 || scanWorkflow.IsRunning || cleanupWorkflow.IsActive)
@@ -813,7 +1196,17 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void OnCancelScanClick(object sender, RoutedEventArgs args) => scanWorkflow.Cancel();
+    private void OnCancelScanClick(object sender, RoutedEventArgs args)
+    {
+        if (folderIntelligenceCancellation is not null)
+        {
+            folderIntelligenceCancellation.Cancel();
+        }
+        else
+        {
+            scanWorkflow.Cancel();
+        }
+    }
 
     private void OnNewScanClick(object sender, RoutedEventArgs args)
     {
@@ -823,6 +1216,10 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         cleanupWorkflow.ResetForNewScan();
+        duplicateFolderResult = null;
+        masterComparisonResult = null;
+        activeComparisonTarget = null;
+        ApplyExactModeVisibility();
         ShellNavigation.SelectedItem = ScanNavigationItem;
         ResultsPage.Visibility = Visibility.Collapsed;
         CleanupPage.Visibility = Visibility.Collapsed;
@@ -1173,8 +1570,6 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         previewCancellation?.Cancel();
         previewCancellation?.Dispose();
-        similarPhotoCancellation?.Cancel();
-        similarPhotoCancellation?.Dispose();
         previewCancellation = null;
     }
 
@@ -1924,9 +2319,16 @@ public sealed partial class MainWindow : Window, IDisposable
         similarRemovalWorkflow.Dispose();
         scanWorkflow.Dispose();
         similarPhotoSession.Dispose();
+        folderIntelligenceCancellation?.Cancel();
+        folderIntelligenceCancellation?.Dispose();
     }
 
     private sealed record SimilarRemovalOutcomeRow(string FileName, string Path, string Outcome, long Size);
+    private sealed record FolderResultRow(int Group, string RootPath, int LogicalFileCount, string TotalLogicalBytes, int IndependentPhysicalFileCount, string PotentialReclaimableBytes)
+    {
+        public long TotalLogicalBytesValue { get; init; }
+        public long PotentialReclaimableBytesValue { get; init; }
+    }
 
     private void OnClosed(object sender, WindowEventArgs args)
     {

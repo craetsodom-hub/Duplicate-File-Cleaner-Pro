@@ -53,6 +53,19 @@ public sealed class ArchitectureBoundaryTests
     }
 
     [TestMethod]
+    public void FolderIntelligenceIsReadOnlyAndCannotInvokeCleanupBoundaries()
+    {
+        string root = FindRepositoryRoot();
+        string[] files = Directory.GetFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => path.Contains($"{Path.DirectorySeparatorChar}FolderIntelligence{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.IsNotEmpty(files);
+        string source = string.Join('\n', files.Select(File.ReadAllText));
+        foreach (string forbidden in new[] { "CleanupEngine", "CleanupPlanner", "WindowsShellRecycleBin", "File.Delete", "File.Move", "Directory.Delete", "SHFileOperation", "Recycle" })
+            Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal);
+    }
+
+    [TestMethod]
     public void RecycleBinComBoundaryRemainsTheOnlyProductionShellDeletionBoundary()
     {
         string root = FindRepositoryRoot();
