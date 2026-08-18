@@ -13,11 +13,14 @@ namespace DuplicateFileCleanerPro.Infrastructure.Windows.Similarity;
 public sealed class WindowsSimilarPhotoDecoder : ISimilarPhotoDecoder
 {
     private const int CodecNotFound = unchecked((int)0x88982F50);
+    private static readonly SemaphoreSlim DecoderGate = new(1, 1);
 
     public async Task<PhotoDecodeOutcome> DecodeAsync(DiscoveredFile file, int maximumDimension, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(file);
         if (maximumDimension is < 8 or > 128) throw new ArgumentOutOfRangeException(nameof(maximumDimension));
+        BitmapDecoder? decoder = null;
+        await DecoderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -25,7 +28,7 @@ public sealed class WindowsSimilarPhotoDecoder : ISimilarPhotoDecoder
 
             StorageFile storageFile = await StorageFile.GetFileFromPathAsync(file.NormalizedPath).AsTask(cancellationToken).ConfigureAwait(false);
             using IRandomAccessStream stream = await storageFile.OpenAsync(FileAccessMode.Read).AsTask(cancellationToken).ConfigureAwait(false);
-            BitmapDecoder decoder = await BitmapDecoder.CreateAsync(stream).AsTask(cancellationToken).ConfigureAwait(false);
+            decoder = await BitmapDecoder.CreateAsync(stream).AsTask(cancellationToken).ConfigureAwait(false);
             BitmapTransform transform = await CreateTransformAsync(decoder, maximumDimension, cancellationToken).ConfigureAwait(false);
             using SoftwareBitmap bitmap = await decoder.GetSoftwareBitmapAsync(
                 BitmapPixelFormat.Bgra8,
@@ -63,6 +66,18 @@ public sealed class WindowsSimilarPhotoDecoder : ISimilarPhotoDecoder
         catch (Exception exception) when (exception is IOException or COMException or ArgumentException or InvalidOperationException)
         {
             return PhotoDecodeOutcome.Failure(SimilarPhotoSkipReason.CorruptImage);
+        }
+        finally
+        {
+            // BitmapDecoder is a WinRT object and can retain a mapped section after its input stream closes.
+            // Release it before callers replace a source file during a scan session.
+            if (decoder is not null)
+            {
+                try { Marshal.FinalReleaseComObject(decoder); }
+                catch (Exception exception) when (exception is InvalidComObjectException or ArgumentException) { }
+            }
+
+            DecoderGate.Release();
         }
     }
 

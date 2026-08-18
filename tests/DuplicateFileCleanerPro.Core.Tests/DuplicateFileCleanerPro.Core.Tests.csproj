@@ -14,5 +14,6 @@
     <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Settings\AppVersionFormatter.cs" Link="Settings\AppVersionFormatter.cs" />
     <Compile Include="..\..\src\DuplicateFileCleanerPro.App\Accessibility\OperationAnnouncementGate.cs" Link="Accessibility\OperationAnnouncementGate.cs" />
     <Compile Include="..\..\src\DuplicateFileCleanerPro.App\SimilarPhotos\SimilarPhotosReviewViewModel.cs" Link="SimilarPhotos\SimilarPhotosReviewViewModel.cs" />
+    <Compile Include="..\..\src\DuplicateFileCleanerPro.App\SimilarPhotos\BoundedThumbnailCache.cs" Link="SimilarPhotos\BoundedThumbnailCache.cs" />
   </ItemGroup>
 </Project>

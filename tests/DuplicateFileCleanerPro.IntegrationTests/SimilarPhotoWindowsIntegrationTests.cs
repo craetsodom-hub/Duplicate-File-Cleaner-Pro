@@ -151,7 +151,25 @@ public sealed class SimilarPhotoWindowsIntegrationTests
             await encoder.FlushAsync();
         }
         public void WriteBytes(string name, byte[] bytes) => File.WriteAllBytes(Path.Combine(Root, name), bytes);
-        public void WriteBytesReplacing(string name, byte[] bytes) => File.WriteAllBytes(Path.Combine(Root, name), bytes);
+        public void WriteBytesReplacing(string name, byte[] bytes)
+        {
+            string path = Path.Combine(Root, name);
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    File.WriteAllBytes(path, bytes);
+                    return;
+                }
+                catch (IOException) when (attempt < 20)
+                {
+                    // WIC can release a mapped section on a deferred finalizer path.
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    Thread.Sleep(25);
+                }
+            }
+        }
         public void WriteBmp(string name, int width, int height, byte[] bgraPixels)
         {
             int pixelBytes = checked(width * height * 4);

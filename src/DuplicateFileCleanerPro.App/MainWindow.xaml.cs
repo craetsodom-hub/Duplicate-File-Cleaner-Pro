@@ -72,6 +72,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly SafetyOperationCoordinator safetyOperations = new();
     private readonly ScanWorkflowController scanWorkflow;
     private readonly SimilarPhotoSessionService similarPhotoSession;
+    private readonly WindowsThumbnailService similarThumbnails = new();
     private readonly CleanupWorkflowViewModel cleanupWorkflow;
     private readonly SettingsViewModel settingsViewModel;
     private readonly AppSettingsService appSettings;
@@ -85,6 +86,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private string activeProfileId = PremiumScanProfiles.AllFilesId;
     private CancellationTokenSource? previewCancellation;
     private CancellationTokenSource? similarPhotoCancellation;
+    private CancellationTokenSource? similarComparisonCancellation;
+    private readonly Dictionary<Image, CancellationTokenSource> thumbnailRequests = [];
     private bool similarPhotosRunning;
     private bool detailsPaneOpen;
     private IntPtr _previousWindowProcedure;
@@ -1440,6 +1443,8 @@ public sealed partial class MainWindow : Window, IDisposable
             customExtensions.Count,
             excludedFolders.Count + excludedExtensions.Count,
             sizeSummary);
+        ScanActionSummaryText.Text = $"{selectedRoots.Count} location{(selectedRoots.Count == 1 ? string.Empty : "s")} · {typeSummary} · {sizeSummary}";
+        ExclusionsSummaryText.Text = $"{excludedFolders.Count} folder{(excludedFolders.Count == 1 ? string.Empty : "s")} · {excludedExtensions.Count} extension{(excludedExtensions.Count == 1 ? string.Empty : "s")}";
 
         if (!hasFileCriteria)
         {
@@ -1497,6 +1502,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private async void OnStartSimilarPhotosClick(object sender, RoutedEventArgs args)
     {
         if (selectedRoots.Count == 0 || similarPhotosRunning || cleanupWorkflow.IsActive) return;
+        ResetSimilarReviewSession();
         similarPhotosRunning = true;
         SimilarPhotosViewModel = null;
         SimilarSetupPanel.Visibility = Visibility.Collapsed;
@@ -1545,10 +1551,19 @@ public sealed partial class MainWindow : Window, IDisposable
     }
 
     private void OnCancelSimilarPhotosClick(object sender, RoutedEventArgs args) => similarPhotoCancellation?.Cancel();
-    private void OnSimilarScanAgainClick(object sender, RoutedEventArgs args) { SimilarResultsPanel.Visibility = Visibility.Collapsed; SimilarSetupPanel.Visibility = Visibility.Visible; UpdateSimilarSetupState(); }
+    private void OnSimilarScanAgainClick(object sender, RoutedEventArgs args)
+    {
+        ResetSimilarReviewSession();
+        SimilarPhotosViewModel = null;
+        SimilarPhotosPage.DataContext = null;
+        SimilarResultsPanel.Visibility = Visibility.Collapsed;
+        SimilarSetupPanel.Visibility = Visibility.Visible;
+        UpdateSimilarSetupState();
+    }
 
     private void ShowSimilarResults(CompletedSimilarPhotoScanResult result)
     {
+        ResetSimilarReviewSession();
         SimilarPhotosViewModel = new SimilarPhotosReviewViewModel(result);
         SimilarPhotosPage.DataContext = SimilarPhotosViewModel;
         SimilarGroupsList.ItemsSource = SimilarPhotosViewModel.VisibleGroups;
@@ -1571,7 +1586,80 @@ public sealed partial class MainWindow : Window, IDisposable
         SimilarPhotosList.ItemsSource = group.Photos;
         SimilarDetailHint.Text = $"{group.Photos.Count} visually related photos · {group.TierLabel}. Choose two photos to compare.";
         SimilarComparisonText.Text = "Choose a left and right photo to compare.";
+        SimilarComparisonMetadata.Text = string.Empty;
+        CancelSimilarComparison();
         SimilarLeftPreview.Source = null;
+        SimilarRightPreview.Source = null;
+    }
+
+    private async void OnSimilarThumbnailLoaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not Image image) return;
+        string? path = image.DataContext switch
+        {
+            SimilarPhotoGroupViewModel group => group.Group.Representative.NormalizedPath,
+            SimilarPhotoItemViewModel photo => photo.File.NormalizedPath,
+            _ => null,
+        };
+        if (string.IsNullOrWhiteSpace(path)) return;
+        CancelThumbnailRequest(image);
+        var request = new CancellationTokenSource();
+        thumbnailRequests[image] = request;
+        image.Source = null;
+        BitmapImage? thumbnail = await similarThumbnails.GetAsync(path, request.Token);
+        if (!isDisposed && thumbnailRequests.TryGetValue(image, out CancellationTokenSource? current)
+            && ReferenceEquals(current, request) && !request.IsCancellationRequested)
+        {
+            image.Source = thumbnail;
+        }
+
+        if (thumbnailRequests.Remove(image, out current) && ReferenceEquals(current, request)) request.Dispose();
+    }
+
+    private void OnSimilarThumbnailUnloaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is Image image)
+        {
+            CancelThumbnailRequest(image);
+            image.Source = null;
+        }
+    }
+
+    private void CancelThumbnailRequest(Image image)
+    {
+        if (thumbnailRequests.Remove(image, out CancellationTokenSource? request))
+        {
+            request.Cancel();
+            request.Dispose();
+        }
+    }
+
+    private void CancelThumbnailRequests()
+    {
+        foreach (CancellationTokenSource request in thumbnailRequests.Values)
+        {
+            request.Cancel();
+            request.Dispose();
+        }
+
+        thumbnailRequests.Clear();
+    }
+
+    private void ResetSimilarReviewSession()
+    {
+        CancelSimilarComparison();
+        CancelThumbnailRequests();
+        similarThumbnails.ResetSession();
+        SimilarLeftPreview.Source = null;
+        SimilarRightPreview.Source = null;
+    }
+
+    private void CancelSimilarComparison()
+    {
+        if (similarComparisonCancellation is null) return;
+        similarComparisonCancellation.Cancel();
+        similarComparisonCancellation.Dispose();
+        similarComparisonCancellation = null;
     }
 
     private void OnSimilarSearchChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { if (SimilarPhotosViewModel is not null) { SimilarPhotosViewModel.SearchText = sender.Text; UpdateSimilarEmptyState(); } }
@@ -1617,12 +1705,45 @@ public sealed partial class MainWindow : Window, IDisposable
         if (photo is not null) { SimilarPhotosViewModel.ChooseRight(photo); UpdateSimilarComparison(); }
     }
     private void OnSwapSimilarClick(object sender, RoutedEventArgs args) { SimilarPhotosViewModel?.Swap(); UpdateSimilarComparison(); }
-    private void UpdateSimilarComparison()
+    private async void UpdateSimilarComparison()
     {
-        if (SimilarPhotosViewModel is not { CanCompare: true, LeftPhoto: { } left, RightPhoto: { } right }) return;
-        SimilarLeftPreview.Source = new BitmapImage(new Uri(left.File.NormalizedPath));
+        CancelSimilarComparison();
+        SimilarLeftPreview.Source = null;
+        SimilarRightPreview.Source = null;
+        SimilarPhotosReviewViewModel? viewModel = SimilarPhotosViewModel;
+        if (viewModel is not { CanCompare: true, LeftPhoto: { } left, RightPhoto: { } right }) return;
+
+        var request = new CancellationTokenSource();
+        similarComparisonCancellation = request;
+        SimilarComparisonText.Visibility = Visibility.Visible;
+        SimilarComparisonText.Text = "Loading comparison...";
         SimilarComparisonText.Text = $"Left: {left.File.FileName}\nRight: {right.File.FileName}";
         SimilarComparisonMetadata.Text = $"{left.File.Length:N0} bytes · {left.File.LastWriteTimeUtc.LocalDateTime:g}\n{right.File.Length:N0} bytes · {right.File.LastWriteTimeUtc.LocalDateTime:g}\n{left.File.NormalizedPath}\n{right.File.NormalizedPath}";
+
+        Task<BitmapImage?> leftTask = similarThumbnails.GetAsync(left.File.NormalizedPath, request.Token);
+        Task<BitmapImage?> rightTask = similarThumbnails.GetAsync(right.File.NormalizedPath, request.Token);
+        BitmapImage?[] previews;
+        try
+        {
+            previews = await Task.WhenAll(leftTask, rightTask);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (request.IsCancellationRequested || isDisposed || !ReferenceEquals(similarComparisonCancellation, request)
+            || !ReferenceEquals(SimilarPhotosViewModel, viewModel) || viewModel.LeftPhoto != left || viewModel.RightPhoto != right)
+        {
+            return;
+        }
+
+        SimilarLeftPreview.Source = previews[0];
+        SimilarRightPreview.Source = previews[1];
+        SimilarComparisonText.Visibility = previews[0] is null || previews[1] is null ? Visibility.Visible : Visibility.Collapsed;
+        if (SimilarComparisonText.Visibility == Visibility.Visible) SimilarComparisonText.Text = "One or both previews are unavailable.";
+        similarComparisonCancellation = null;
+        request.Dispose();
     }
     private async void OnOpenSimilarLeftClick(object sender, RoutedEventArgs args) { if (SimilarPhotosViewModel?.LeftPhoto is { } photo && File.Exists(photo.File.NormalizedPath)) await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(photo.File.NormalizedPath)); }
     private async void OnRevealSimilarLeftClick(object sender, RoutedEventArgs args) { if (SimilarPhotosViewModel?.LeftPhoto is { } photo && File.Exists(photo.File.NormalizedPath)) await Windows.System.Launcher.LaunchFolderPathAsync(Path.GetDirectoryName(photo.File.NormalizedPath)); }
@@ -1645,6 +1766,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
         isDisposed = true;
         CancelResultsPreview();
+        CancelSimilarComparison();
+        CancelThumbnailRequests();
+        similarThumbnails.Dispose();
         PageHost.SizeChanged -= OnPageHostSizeChanged;
         activeScanGeneration++;
         elapsedTimer.Stop();

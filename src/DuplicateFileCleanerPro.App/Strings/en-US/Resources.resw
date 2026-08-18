@@ -9,7 +9,7 @@
   <data name="FoundationMessage.Text" xml:space="preserve">
     <value>Engineering foundation</value>
   </data>
-  <data name="ScanNavigationItem.Content" xml:space="preserve"><value>Scan</value></data>
+  <data name="ScanNavigationItem.Content" xml:space="preserve"><value>Exact Duplicates</value></data>
   <data name="SettingsNavigationItem.Content" xml:space="preserve"><value>Settings</value></data>
   <data name="ScanSetupTitle.Text" xml:space="preserve"><value>Scan setup</value></data>
   <data name="ScanSetupDescription.Text" xml:space="preserve"><value>Choose local sources, precise file criteria, and reusable exclusions.</value></data>
@@ -42,7 +42,7 @@
   <data name="ReviewEmpty" xml:space="preserve"><value>Select one or more local folders. Processing stays on this device.</value></data>
   <data name="CompletionSummary" xml:space="preserve"><value>{0} duplicate groups found</value></data>
   <data name="CompletionDetail" xml:space="preserve"><value>{0} duplicate files · {1:N0} reclaimable bytes · {2} items skipped</value></data>
-  <data name="ResultsNavigationItem.Content" xml:space="preserve"><value>Results</value></data>
+  <data name="ResultsNavigationItem.Content" xml:space="preserve"><value>Exact Results</value></data>
   <data name="ResultsTitle.Text" xml:space="preserve"><value>Verified duplicates</value></data>
   <data name="ResultsDescription.Text" xml:space="preserve"><value>Review the current completed scan. Selected candidates are not removed.</value></data>
   <data name="ResultsNewScanButton.Content" xml:space="preserve"><value>New scan</value></data>
