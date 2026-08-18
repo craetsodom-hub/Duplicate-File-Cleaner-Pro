@@ -33,6 +33,8 @@ using System.Reflection;
 using DuplicateFileCleanerPro.Core.Similarity;
 using DuplicateFileCleanerPro.Infrastructure.Windows.Similarity;
 using DuplicateFileCleanerPro.App.SimilarPhotos;
+using DuplicateFileCleanerPro.Core.SimilarRemoval;
+using DuplicateFileCleanerPro.Infrastructure.Windows.SimilarRemoval;
 
 namespace DuplicateFileCleanerPro.App;
 
@@ -61,6 +63,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private static readonly CompositeFormat SelectionAssistantProposalFormat = CompositeFormat.Parse(ResourceLoader.GetString("SelectionAssistantProposalFormat"));
     private static readonly CompositeFormat SelectionAssistantAppliedFormat = CompositeFormat.Parse(ResourceLoader.GetString("SelectionAssistantAppliedFormat"));
     private static readonly CompositeFormat ResultsActiveFiltersFormat = CompositeFormat.Parse(ResourceLoader.GetString("ResultsActiveFiltersFormat"));
+    private static readonly CompositeFormat SimilarRemovalMarkedFormat = CompositeFormat.Parse(ResourceLoader.GetString("SimilarRemovalMarkedFormat"));
+    private static readonly CompositeFormat SimilarRemovalConfirmMessageFormat = CompositeFormat.Parse(ResourceLoader.GetString("SimilarRemovalConfirmMessage"));
+    private static readonly CompositeFormat SimilarRemovalProgressFormat = CompositeFormat.Parse(ResourceLoader.GetString("SimilarRemovalProgressFormat"));
+    private static readonly CompositeFormat SimilarRemovalCompletionFormat = CompositeFormat.Parse(ResourceLoader.GetString("SimilarRemovalCompletionFormat"));
     private readonly WindowsScanRootNormalizer rootNormalizer = new();
     private readonly ObservableCollection<SelectedScanRoot> selectedRoots = [];
     private readonly ObservableCollection<DriveChoice> availableDrives = [];
@@ -74,6 +80,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly SimilarPhotoSessionService similarPhotoSession;
     private readonly WindowsThumbnailService similarThumbnails = new();
     private readonly CleanupWorkflowViewModel cleanupWorkflow;
+    private readonly SimilarPhotoRemovalWorkflowViewModel similarRemovalWorkflow;
     private readonly SettingsViewModel settingsViewModel;
     private readonly AppSettingsService appSettings;
     private readonly Stopwatch scanStopwatch = new();
@@ -104,6 +111,8 @@ public sealed partial class MainWindow : Window, IDisposable
         similarPhotoSession = new SimilarPhotoSessionService(new WindowsFileDiscoveryService(), new WindowsSimilarPhotoDecoder());
         cleanupWorkflow = new CleanupWorkflowViewModel(
             new CleanupEngine(new WindowsCleanupPlatformService(), safetyOperations));
+        similarRemovalWorkflow = new SimilarPhotoRemovalWorkflowViewModel(
+            new SimilarPhotoRemovalEngine(new WindowsSimilarPhotoRemovalPlatform(), safetyOperations));
         settingsViewModel = new SettingsViewModel(settings, ApplyAppearance);
         isApplyingSetup = true;
         InitializeComponent();
@@ -1554,9 +1563,13 @@ public sealed partial class MainWindow : Window, IDisposable
     private void OnSimilarScanAgainClick(object sender, RoutedEventArgs args)
     {
         ResetSimilarReviewSession();
+        similarRemovalWorkflow.Reset();
         SimilarPhotosViewModel = null;
         SimilarPhotosPage.DataContext = null;
         SimilarResultsPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalReviewPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalProgressPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalCompletionPanel.Visibility = Visibility.Collapsed;
         SimilarSetupPanel.Visibility = Visibility.Visible;
         UpdateSimilarSetupState();
     }
@@ -1565,6 +1578,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         ResetSimilarReviewSession();
         SimilarPhotosViewModel = new SimilarPhotosReviewViewModel(result);
+        SimilarPhotosViewModel.PropertyChanged += OnSimilarReviewPropertyChanged;
         SimilarPhotosPage.DataContext = SimilarPhotosViewModel;
         SimilarGroupsList.ItemsSource = SimilarPhotosViewModel.VisibleGroups;
         SimilarGroupCountText.Text = SimilarPhotosViewModel.GroupCount.ToString(CultureInfo.CurrentCulture);
@@ -1577,6 +1591,8 @@ public sealed partial class MainWindow : Window, IDisposable
         SimilarEmptyDescription.Text = "No visual matches met the selected sensitivity. Try another analysis sensitivity if useful.";
         SimilarResultsPanel.Visibility = Visibility.Visible;
         SimilarSetupPanel.Visibility = Visibility.Collapsed;
+        SimilarStaleNotice.IsOpen = false;
+        UpdateSimilarRemovalAction();
     }
 
     private void OnSimilarGroupSelectionChanged(object sender, SelectionChangedEventArgs args)
@@ -1613,6 +1629,28 @@ public sealed partial class MainWindow : Window, IDisposable
             image.Source = thumbnail;
         }
 
+        if (thumbnailRequests.Remove(image, out current) && ReferenceEquals(current, request)) request.Dispose();
+    }
+
+    private async void OnSimilarRemovalThumbnailLoaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not Image { DataContext: SimilarPhotoRemovalReviewItem item } image) return;
+        CancelThumbnailRequest(image);
+        var request = new CancellationTokenSource();
+        thumbnailRequests[image] = request;
+        image.Source = null;
+        BitmapImage? thumbnail = await similarThumbnails.GetAsync(item.File.NormalizedPath, request.Token);
+        try
+        {
+            StorageFile file = await StorageFile.GetFileFromPathAsync(item.File.NormalizedPath);
+            Windows.Storage.FileProperties.ImageProperties properties = await file.Properties.GetImagePropertiesAsync();
+            item.SetDimensions(properties.Width, properties.Height);
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or UnauthorizedAccessException or COMException)
+        {
+        }
+        if (!isDisposed && thumbnailRequests.TryGetValue(image, out CancellationTokenSource? current)
+            && ReferenceEquals(current, request) && !request.IsCancellationRequested) image.Source = thumbnail;
         if (thumbnailRequests.Remove(image, out current) && ReferenceEquals(current, request)) request.Dispose();
     }
 
@@ -1684,6 +1722,114 @@ public sealed partial class MainWindow : Window, IDisposable
         SimilarPhotoReviewMark next = photo.Mark switch { SimilarPhotoReviewMark.None => SimilarPhotoReviewMark.Keep, SimilarPhotoReviewMark.Keep => SimilarPhotoReviewMark.ConsiderRemoving, _ => SimilarPhotoReviewMark.None };
         photo.SetMark(next);
     }
+
+    private void OnSimilarReviewPropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(SimilarPhotosReviewViewModel.MarkedForRemovalCount)
+            or nameof(SimilarPhotosReviewViewModel.CanReviewRemoval)
+            or nameof(SimilarPhotosReviewViewModel.IsStale)) UpdateSimilarRemovalAction();
+    }
+
+    private void UpdateSimilarRemovalAction()
+    {
+        int count = SimilarPhotosViewModel?.MarkedForRemovalCount ?? 0;
+        SimilarMarkedRemovalText.Text = string.Format(CultureInfo.CurrentCulture, SimilarRemovalMarkedFormat, count);
+        ReviewSimilarRemovalButton.IsEnabled = SimilarPhotosViewModel?.CanReviewRemoval == true;
+        SimilarStaleNotice.IsOpen = SimilarPhotosViewModel?.IsStale == true;
+    }
+
+    private void OnReviewSimilarRemovalClick(object sender, RoutedEventArgs args)
+    {
+        if (SimilarPhotosViewModel is null || !similarRemovalWorkflow.BeginReview(SimilarPhotosViewModel)) return;
+        SimilarResultsPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalReviewPanel.Visibility = Visibility.Visible;
+        SimilarRemovalProgressPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalCompletionPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalReviewList.ItemsSource = similarRemovalWorkflow.RemovalItems;
+        SimilarRemovalRemainingList.ItemsSource = similarRemovalWorkflow.RemainingItems;
+        SimilarRemovalGroupsText.Text = similarRemovalWorkflow.AffectedGroupCount.ToString(CultureInfo.CurrentCulture);
+        SimilarRemovalPhotosText.Text = similarRemovalWorkflow.SelectedPhotoCount.ToString(CultureInfo.CurrentCulture);
+        SimilarRemovalBytesText.Text = ResultDisplayFormatter.FormatBytes(similarRemovalWorkflow.SelectedBytes);
+        SimilarRemovalRemainingText.Text = similarRemovalWorkflow.RemainingPhotoCount.ToString(CultureInfo.CurrentCulture);
+        SimilarRemovalLocationsText.Text = similarRemovalWorkflow.LocationCount.ToString(CultureInfo.CurrentCulture);
+        ConfirmSimilarRemovalButton.Focus(FocusState.Programmatic);
+    }
+
+    private void OnSimilarRemovalBackClick(object sender, RoutedEventArgs args)
+    {
+        if (similarRemovalWorkflow.IsActive) return;
+        similarRemovalWorkflow.ReturnToResults();
+        SimilarRemovalReviewPanel.Visibility = Visibility.Collapsed;
+        SimilarResultsPanel.Visibility = Visibility.Visible;
+        ReviewSimilarRemovalButton.Focus(FocusState.Programmatic);
+    }
+
+    private async void OnConfirmSimilarRemovalClick(object sender, RoutedEventArgs args)
+    {
+        var confirmation = new ContentDialog
+        {
+            XamlRoot = WindowRoot.XamlRoot,
+            Title = Text("SimilarRemovalConfirmTitle"),
+            Content = string.Format(CultureInfo.CurrentCulture, SimilarRemovalConfirmMessageFormat, similarRemovalWorkflow.SelectedPhotoCount),
+            PrimaryButtonText = Text("SimilarRemovalConfirmPrimary"),
+            CloseButtonText = Text("SimilarRemovalConfirmCancel"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
+
+        SimilarRemovalReviewPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalProgressPanel.Visibility = Visibility.Visible;
+        SimilarRemovalCompletionPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalProgressBar.Maximum = Math.Max(1, similarRemovalWorkflow.SelectedPhotoCount);
+        SimilarRemovalProgressBar.Value = 0;
+        var progress = new CoalescingUiProgress<SimilarPhotoRemovalProgress>(DispatcherQueue, UpdateSimilarRemovalProgress);
+        SimilarPhotoRemovalResult? result = await similarRemovalWorkflow.ExecuteConfirmedAsync(progress);
+        SimilarRemovalProgressPanel.Visibility = Visibility.Collapsed;
+        SimilarRemovalCompletionPanel.Visibility = Visibility.Visible;
+        UpdateSimilarRemovalAction();
+        ShowSimilarRemovalCompletion(result);
+    }
+
+    private void UpdateSimilarRemovalProgress(SimilarPhotoRemovalProgress progress)
+    {
+        SimilarRemovalProgressBar.Value = progress.ProcessedPhotos;
+        SimilarRemovalActivityText.Text = string.Format(
+            CultureInfo.CurrentCulture,
+            SimilarRemovalProgressFormat,
+            Math.Min(progress.ProcessedPhotos, progress.TotalPhotos),
+            progress.TotalPhotos);
+    }
+
+    private void ShowSimilarRemovalCompletion(SimilarPhotoRemovalResult? result)
+    {
+        int moved = result?.RecycledPhotoCount ?? 0;
+        int skipped = result?.SkippedPhotoCount ?? 0;
+        int failed = result?.FailedPhotoCount ?? (similarRemovalWorkflow.State == SimilarPhotoRemovalWorkflowState.Failed ? 1 : 0);
+        SimilarRemovalCompletionSummary.Text = string.Format(CultureInfo.CurrentCulture, SimilarRemovalCompletionFormat, moved, skipped, failed);
+        SimilarRemovalMovedText.Text = moved.ToString(CultureInfo.CurrentCulture);
+        SimilarRemovalMovedBytesText.Text = ResultDisplayFormatter.FormatBytes(result?.RecycledBytes ?? 0);
+        SimilarRemovalSkippedText.Text = skipped.ToString(CultureInfo.CurrentCulture);
+        SimilarRemovalFailedText.Text = failed.ToString(CultureInfo.CurrentCulture);
+        SimilarRemovalOutcomeList.ItemsSource = result?.Groups.SelectMany(group => group.Outcomes).Select(outcome => new SimilarRemovalOutcomeRow(
+            outcome.Candidate.ExpectedFile.FileName,
+            outcome.Candidate.ExpectedFile.NormalizedPath,
+            SimilarRemovalOutcomeText(outcome.Status),
+            outcome.Candidate.ExpectedFile.Length)).ToArray() ?? [];
+    }
+
+    private static string SimilarRemovalOutcomeText(SimilarPhotoRemovalOutcomeStatus status) => Text(status switch
+    {
+        SimilarPhotoRemovalOutcomeStatus.Recycled => "SimilarRemovalOutcomeMoved",
+        SimilarPhotoRemovalOutcomeStatus.SkippedMissing => "SimilarRemovalOutcomeMissing",
+        SimilarPhotoRemovalOutcomeStatus.SkippedIdentityMismatch or SimilarPhotoRemovalOutcomeStatus.SkippedChanged => "SimilarRemovalOutcomeChanged",
+        SimilarPhotoRemovalOutcomeStatus.SkippedSurvivorUnavailable => "SimilarRemovalOutcomeSurvivor",
+        SimilarPhotoRemovalOutcomeStatus.SkippedPolicy or SimilarPhotoRemovalOutcomeStatus.SkippedAmbiguousHardLinks => "SimilarRemovalOutcomePolicy",
+        SimilarPhotoRemovalOutcomeStatus.Cancelled => "SimilarRemovalOutcomeCancelled",
+        SimilarPhotoRemovalOutcomeStatus.FailedRecycleBin => "SimilarRemovalOutcomeRecycleBin",
+        _ => "SimilarRemovalOutcomePlatform",
+    });
+
+    private void OnCancelSimilarRemovalClick(object sender, RoutedEventArgs args) => similarRemovalWorkflow.Cancel();
     private SimilarPhotoItemViewModel? SelectedSimilarPhoto()
     {
         if (SimilarPhotosList.SelectedItem is SimilarPhotoItemViewModel selected) return selected;
@@ -1773,9 +1919,12 @@ public sealed partial class MainWindow : Window, IDisposable
         activeScanGeneration++;
         elapsedTimer.Stop();
         cleanupWorkflow.Dispose();
+        similarRemovalWorkflow.Dispose();
         scanWorkflow.Dispose();
         similarPhotoSession.Dispose();
     }
+
+    private sealed record SimilarRemovalOutcomeRow(string FileName, string Path, string Outcome, long Size);
 
     private void OnClosed(object sender, WindowEventArgs args)
     {

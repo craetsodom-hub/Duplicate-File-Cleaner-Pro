@@ -4,6 +4,7 @@ public enum SafetyOperationKind
 {
     Scan,
     Cleanup,
+    SimilarPhotoRemoval,
 }
 
 /// <summary>Small session-scoped owner that prevents scan and cleanup lifecycles from overlapping.</summary>

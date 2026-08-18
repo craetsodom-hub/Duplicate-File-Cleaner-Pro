@@ -6,6 +6,7 @@ namespace DuplicateFileCleanerPro.Core.Tests;
 [TestClass]
 public sealed class ArchitectureBoundaryTests
 {
+    private static readonly string[] RecycleBinBoundarySource = ["WindowsShellRecycleBin.cs"];
     [TestMethod]
     public void CoreAssemblyDoesNotReferenceUiOrWindowsInfrastructure()
     {
@@ -34,6 +35,34 @@ public sealed class ArchitectureBoundaryTests
         string source = string.Join('\n', files.Select(File.ReadAllText));
         foreach (string forbidden in new[] { "CleanupEngine", "WindowsShellRecycleBin", "File.Delete", "File.Move", "Directory.Delete", "SHFileOperation", "Recycle" })
             Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal);
+    }
+
+    [TestMethod]
+    public void SimilarRemovalIsDedicatedAndCannotInvokeExactCleanup()
+    {
+        string root = FindRepositoryRoot();
+        string[] files = Directory.GetFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => path.Contains($"{Path.DirectorySeparatorChar}SimilarRemoval{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("SimilarPhotoRemovalWorkflowViewModel.cs", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.IsNotEmpty(files);
+        string source = string.Join('\n', files.Select(File.ReadAllText));
+        foreach (string forbidden in new[] { "CleanupEngine", "CleanupPlanner", "File.Delete", "File.Move", "Directory.Delete", "SHFileOperation" })
+            Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal);
+        StringAssert.Contains(source, "SimilarPhotoRemovalEngine");
+    }
+
+    [TestMethod]
+    public void RecycleBinComBoundaryRemainsTheOnlyProductionShellDeletionBoundary()
+    {
+        string root = FindRepositoryRoot();
+        string sourceRoot = Path.Combine(root, "src");
+        string[] destructiveSources = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => File.ReadAllText(path).Contains("DeleteItem(", StringComparison.Ordinal))
+            .Select(path => Path.GetFileName(path)!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        CollectionAssert.AreEquivalent(RecycleBinBoundarySource, destructiveSources);
     }
 
     private static string FindRepositoryRoot()

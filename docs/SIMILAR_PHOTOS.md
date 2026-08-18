@@ -2,7 +2,7 @@
 
 ## Semantics and boundary
 
-Similar Photos is a read-only analysis mode for local images that appear visually related. It is separate from `ExactDuplicateDetector`: similarity is evidence, not mathematical identity, and its groups must never be called verified, exact, safe, or automatically removable. The Phase 16 engine has no cleanup plan, keeper rule, selection, rename, move, delete, or Recycle Bin dependency.
+Similar Photos is a read-only analysis engine for local images that appear visually related. It is separate from `ExactDuplicateDetector`: similarity is evidence, not mathematical identity, and its groups must never be called verified, exact, safe, or automatically removable. The Phase 16 engine has no cleanup plan, keeper rule, selection, rename, move, delete, or Recycle Bin dependency. Phase 18 adds a separate explicit-human-intent removal boundary documented in `SIMILAR_PHOTOS_REMOVAL.md`; it does not change the matching engine.
 
 `DuplicateFileCleanerPro.Core.Similarity` owns the platform-neutral fingerprints, thresholds, candidate index, comparison evidence, complete-link grouping, progress, cancellation, and result models. `DuplicateFileCleanerPro.Infrastructure.Windows.Similarity` owns bounded Windows image decoding and discovery-snapshot validation. No Similar Photos UI or persistent index exists in this phase.
 
@@ -60,4 +60,4 @@ Known limitations:
 - visually repetitive or low-information images are difficult, so the conservative gates can produce false negatives;
 - GIF animation beyond the first frame is ignored;
 - WebP and HEIC/HEIF availability varies by machine;
-- this is perceptual evidence, not identity proof, and must remain non-destructive until a separate review UX is designed.
+- this is perceptual evidence, not identity proof, and never authorizes removal without the separate reviewed-removal workflow.

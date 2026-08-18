@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using DuplicateFileCleanerPro.Core.Discovery;
 using DuplicateFileCleanerPro.Core.Scanning;
+using DuplicateFileCleanerPro.Core.SimilarRemoval;
 using DuplicateFileCleanerPro.Core.Similarity;
 
 namespace DuplicateFileCleanerPro.App.SimilarPhotos;
@@ -18,6 +19,7 @@ public sealed class SimilarPhotosReviewViewModel : INotifyPropertyChanged
     private SimilarPhotoGroupViewModel? activeGroup;
     private SimilarPhotoItemViewModel? leftPhoto;
     private SimilarPhotoItemViewModel? rightPhoto;
+    private bool isStale;
 
     public SimilarPhotosReviewViewModel(CompletedSimilarPhotoScanResult result)
     {
@@ -42,6 +44,10 @@ public sealed class SimilarPhotosReviewViewModel : INotifyPropertyChanged
     public SimilarPhotoItemViewModel? LeftPhoto { get => leftPhoto; private set { if (leftPhoto == value) return; leftPhoto = value; OnChanged(); OnChanged(nameof(CanCompare)); } }
     public SimilarPhotoItemViewModel? RightPhoto { get => rightPhoto; private set { if (rightPhoto == value) return; rightPhoto = value; OnChanged(); OnChanged(nameof(CanCompare)); } }
     public bool CanCompare => LeftPhoto is not null && RightPhoto is not null && LeftPhoto != RightPhoto;
+    public int MarkedForRemovalCount => allGroups.Sum(group => group.Photos.Count(photo => photo.Mark == SimilarPhotoReviewMark.ConsiderRemoving));
+    public long MarkedForRemovalBytes => allGroups.SelectMany(group => group.Photos).Where(photo => photo.Mark == SimilarPhotoReviewMark.ConsiderRemoving).Sum(photo => photo.File.Length);
+    public bool IsStale => isStale;
+    public bool CanReviewRemoval => !isStale && MarkedForRemovalCount > 0;
     public string SearchText { get => searchText; set { if (searchText == value) return; searchText = value ?? string.Empty; Refresh(); OnChanged(); } }
     public SimilarityTier? TierFilter { get => tierFilter; set { if (tierFilter == value) return; tierFilter = value; Refresh(); OnChanged(); } }
     public SimilarPhotoSortOption SortOption { get => sortOption; set { if (sortOption == value) return; sortOption = value; Refresh(); OnChanged(); } }
@@ -57,8 +63,31 @@ public sealed class SimilarPhotosReviewViewModel : INotifyPropertyChanged
     public void ChooseLeft(SimilarPhotoItemViewModel photo) { if (IsInActiveGroup(photo)) LeftPhoto = photo; }
     public void ChooseRight(SimilarPhotoItemViewModel photo) { if (IsInActiveGroup(photo) && photo != LeftPhoto) RightPhoto = photo; }
     public void Swap() { if (!CanCompare) return; (LeftPhoto, RightPhoto) = (RightPhoto, LeftPhoto); }
-    public void ClearMarks() { foreach (SimilarPhotoGroupViewModel group in allGroups) foreach (SimilarPhotoItemViewModel photo in group.Photos) photo.SetMark(SimilarPhotoReviewMark.None); }
+    public void ClearMarks() { foreach (SimilarPhotoGroupViewModel group in allGroups) foreach (SimilarPhotoItemViewModel photo in group.Photos) photo.SetMarkCore(SimilarPhotoReviewMark.None); NotifyMarksChanged(); }
     public void ClearFilters() { SearchText = string.Empty; TierFilter = null; }
+    public SimilarPhotoRemovalIntent CreateRemovalIntent() => new(
+        Result,
+        allGroups.SelectMany(group => group.Photos)
+            .Where(photo => photo.Mark == SimilarPhotoReviewMark.ConsiderRemoving)
+            .Select(photo => photo.File.PhysicalIdentity));
+
+    public void MarkStale()
+    {
+        if (isStale) return;
+        foreach (SimilarPhotoGroupViewModel group in allGroups)
+        foreach (SimilarPhotoItemViewModel photo in group.Photos)
+            photo.SetMarkCore(SimilarPhotoReviewMark.None);
+        isStale = true;
+        OnChanged(nameof(IsStale));
+        NotifyMarksChanged();
+    }
+
+    internal void NotifyMarksChanged()
+    {
+        OnChanged(nameof(MarkedForRemovalCount));
+        OnChanged(nameof(MarkedForRemovalBytes));
+        OnChanged(nameof(CanReviewRemoval));
+    }
 
     private bool IsInActiveGroup(SimilarPhotoItemViewModel photo) => ActiveGroup is not null && ActiveGroup.Photos.Contains(photo);
     private void Refresh()
@@ -114,8 +143,20 @@ public sealed class SimilarPhotoItemViewModel : INotifyPropertyChanged
     public bool Matches(string text) => File.FileName.Contains(text, StringComparison.OrdinalIgnoreCase) || File.NormalizedPath.Contains(text, StringComparison.OrdinalIgnoreCase);
     public bool SetMark(SimilarPhotoReviewMark value)
     {
+        if (Group.Owner.IsStale) return false;
         if (value == SimilarPhotoReviewMark.ConsiderRemoving && Group.Photos.All(photo => photo == this || photo.Mark == SimilarPhotoReviewMark.ConsiderRemoving)) return false;
-        if (mark == value) return true;
-        mark = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Mark))); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MarkLabel))); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AccessibleName))); return true;
+        if (!SetMarkCore(value)) return true;
+        Group.Owner.NotifyMarksChanged();
+        return true;
+    }
+
+    internal bool SetMarkCore(SimilarPhotoReviewMark value)
+    {
+        if (mark == value) return false;
+        mark = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Mark)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MarkLabel)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AccessibleName)));
+        return true;
     }
 }

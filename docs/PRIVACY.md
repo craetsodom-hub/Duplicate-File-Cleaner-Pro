@@ -8,4 +8,4 @@ Cleanup is a local Windows Recycle Bin operation. This document describes curren
 
 ## Similar Photos
 
-Similar Photos analyzes eligible images locally. It creates bounded image decodes and visual fingerprints in memory for the active analysis only; it does not upload photos, build a persistent image index, retain thumbnails, save similarity groups, keep review marks, or store photo history. The only Similar Photos preference retained locally is the default sensitivity. Similar Photos review is non-destructive in the current product.
+Similar Photos analyzes eligible images locally. It creates bounded image decodes and visual fingerprints in memory for the active analysis only; it does not upload photos, build a persistent image index, retain thumbnails, save similarity groups, keep review marks, removed paths, removal outcomes, or store photo history. The only Similar Photos preference retained locally is the default sensitivity. A photo is eligible for removal only after an explicit session-only `Consider removing` mark, dedicated review, identity revalidation, and confirmation; the operation uses the local Windows Recycle Bin and is not retained as app history.
